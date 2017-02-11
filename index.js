@@ -1,3 +1,15 @@
+const worker_id='DqnzfdRssa7w68tPc';
+const worker_token='E3nMrYYvezC';
+const host = 'ai.pasteur.fr';
+const port = 443;
+const ssl = true;
+const workdir='./dai-workdir';
+const debug = false;
+const worker_version = '0.1';
+const task_concurrency = 10;
+const task_timeout = 10*24*60*60; //10 days maximum
+
+
 const DDPClient = require("ddp");
 const queue = require('queue');
 const child_process = require('child_process');
@@ -6,18 +18,9 @@ const path = require('path');
 const mkdirp = require('mkdirp');
 const os = require('os');
 
-const worker_id='DqnzfdRssa7w68tPc',
-    worker_token='E3nMrYYvezC',
-    host = 'ai.pasteur.fr',
-    port = 443,
-    ssl = true;
-const workdir='./dai-workdir';
-const debug = false;
-const worker_version = '0.1'
-
 const task_queue = queue();
-task_queue.concurrency = 10;
-task_queue.timeout = 10*24*60*60; //10 days maximum
+task_queue.concurrency = task_concurrency;
+task_queue.timeout = task_timeout;
 
 // use the timeout feature to deal with tasks that
 // take too long or forget to execute a callback
@@ -84,110 +87,6 @@ ddpclient.connect(function(error, wasReconnect) {
   //     }
   //   );
   // }, 3000);
-function worker_set(v){
-  ddpclient.call('workers.update', [worker_id, worker_token, {'$set': v}], function (err, result) {
-    if(err) console.error('worker update error:', err);
-  });
-}
-const tasks = {}
-function Task(id){
-  this.id = id;
-  this.workdir = path.join(workdir, 'widget-'+this.get_widget('_id'), 'task-'+this.id);
-  const $ctrl = {
-    task: this,
-    child_process: child_process,
-  };
-  const context = {
-   console: console,
-   setTimeout: setTimeout,
-   $ctrl: $ctrl
-  }
-  this.context = context;
-  this.end = this.quit;
-  // this.quit_timer = setTimeout(()=>{ console.log('time out'); this.quit();}, 30000);
-}
-Task.prototype.get = function(k){
-  return ddpclient.collections.tasks[this.id][k];
-}
-Task.prototype.set= function(v){
-  ddpclient.call("tasks.update.worker", [this.id, worker_id, worker_token, {'$set': v}], function (err, result) {
-    if(err) console.error('task set error:', err);
-  });
-}
-Task.prototype.push= function(v){
-  ddpclient.call("tasks.update.worker", [this.id, worker_id, worker_token, {'$push': v}], function (err, result) {
-    if(err) console.error('task push error:', err);
-  });
-}
-Task.prototype.pull= function(v){
-  ddpclient.call("tasks.update.worker", [this.id, worker_id, worker_token, {'$pull': v}], function (err, result) {
-    if(err) console.error('task pull error:', err);
-  });
-}
-Task.prototype.addToSet= function(v){
-  ddpclient.call("tasks.update.worker", [this.id, worker_id, worker_token, {'$addToSet': v}], function (err, result) {
-    if(err) console.error('task addToSet error:', err);
-  });
-}
-Task.prototype.get_widget = function(key){
-  const wid = ddpclient.collections.tasks[this.id]['widgetId'];
-  if(key){
-    return ddpclient.collections.widgets[wid][key];
-  }
-  return ddpclient.collections.widgets[wid];
-}
-Task.prototype.init = function(process){
-  mkdirp(this.workdir, function(err) {
-    if(err) console.error(err);
-  });
-  process.stderr.on('data', (data) => {
-    console.error('stderr: ' + data.toString());
-    this.set({'status.error': data.toString()});
-  });
-  process.on('close', (code) => {
-    console.log('exited with code: ' + code);
-    this.end('exited:' + code);
-  });
-  this.process = process;
-  this.set({'status.stage':'init', 'status.info':'','status.error':'', 'status.running': true});
-}
-Task.prototype.quit = function(msg){
-  const m = {'status.running': false, 'status.waiting':false, visible2worker:false};
-  m['status.stage'] = msg || 'exited';
-  this.set(m);
-}
-Task.prototype.execute = function(cmd){
-  if(cmd == 'run'){
-    this.set({'status.waiting': true});
-    task_queue.push((cb)=> {
-      // overide end()
-      this.end = (status)=>{
-        this.quit(status);
-        cb();
-      }
-      this.set({'status.waiting': false});
-      try {
-        const code_snippets = this.get_widget('code_snippets');
-        if('worker_js' in code_snippets){
-          vm.runInNewContext(code_snippets['worker_js'].content, this.context);
-        }
-        else{
-          console.log('worker.js not found.');
-          this.set({'status.info': 'worker.js not found.'});
-        }
-      } catch (e) {
-        console.error(e);
-        this.set({'status.error': e.toString()});
-        this.end();
-      }
-    });
-  }
-  else if(cmd == 'stop'){
-    if(this.process) this.process.kill();
-  }
-  this.set({'cmd': ''});
-  // clearTimeout(this.quit_timer);
-}
 
   /*
    * Subscribe to a Meteor Collection
@@ -213,7 +112,8 @@ Task.prototype.execute = function(cmd){
           function (error) {
             console.log('tasks subscribed.');
             task_queue.autostart = true;
-            worker_set({status:'ready', version: worker_version, name: os.platform()});
+            worker_set({status:'ready', version: worker_version, name: os.hostname()+'('+worker_id.slice(0, 4)+')'});
+            setInterval(function(){ worker_set({'resources.date_time':new Date().toLocaleString()}); }, 3000);
             //console.log(ddpclient.collections.tasks);
         });
       }
@@ -279,6 +179,111 @@ Task.prototype.execute = function(cmd){
 
 });
 
+function worker_set(v){
+  ddpclient.call('workers.update', [worker_id, worker_token, {'$set': v}], function (err, result) {
+    if(err) console.error('worker update error:', err);
+  });
+}
+
+const tasks = {}
+function Task(id){
+  this.id = id;
+  this.workdir = path.join(workdir, 'widget-'+this.get_widget('_id'), 'task-'+this.id);
+  mkdirp(this.workdir, function(err) {
+    if(err) console.error(err);
+  });
+  const $ctrl = {
+    task: this,
+    child_process: child_process,
+  };
+  const context = {
+   console: console,
+   setTimeout: setTimeout,
+   $ctrl: $ctrl
+  }
+  this.context = context;
+  this.end = this.quit;
+  // this.quit_timer = setTimeout(()=>{ console.log('time out'); this.quit();}, 30000);
+}
+Task.prototype.get = function(k){
+  return ddpclient.collections.tasks[this.id][k];
+}
+Task.prototype.set= function(v){
+  ddpclient.call("tasks.update.worker", [this.id, worker_id, worker_token, {'$set': v}], function (err, result) {
+    if(err) console.error('task set error:', err);
+  });
+}
+Task.prototype.push= function(v){
+  ddpclient.call("tasks.update.worker", [this.id, worker_id, worker_token, {'$push': v}], function (err, result) {
+    if(err) console.error('task push error:', err);
+  });
+}
+Task.prototype.pull= function(v){
+  ddpclient.call("tasks.update.worker", [this.id, worker_id, worker_token, {'$pull': v}], function (err, result) {
+    if(err) console.error('task pull error:', err);
+  });
+}
+Task.prototype.addToSet= function(v){
+  ddpclient.call("tasks.update.worker", [this.id, worker_id, worker_token, {'$addToSet': v}], function (err, result) {
+    if(err) console.error('task addToSet error:', err);
+  });
+}
+Task.prototype.get_widget = function(key){
+  const wid = ddpclient.collections.tasks[this.id]['widgetId'];
+  if(key){
+    return ddpclient.collections.widgets[wid][key];
+  }
+  return ddpclient.collections.widgets[wid];
+}
+Task.prototype.init = function(process){
+  process.stderr.on('data', (data) => {
+    console.error('stderr: ' + data.toString());
+    this.set({'status.error': data.toString()});
+  });
+  process.on('close', (code) => {
+    console.log('exited with code: ' + code);
+    this.end('exited:' + code);
+  });
+  this.process = process;
+  this.set({'status.stage':'init', 'status.info':'','status.error':'', 'status.running': true});
+}
+Task.prototype.quit = function(msg){
+  const m = {'status.running': false, 'status.waiting':false, visible2worker:false};
+  m['status.stage'] = msg || 'exited';
+  this.set(m);
+}
+Task.prototype.execute = function(cmd){
+  if(cmd == 'run'){
+    this.set({'status.waiting': true});
+    task_queue.push((cb)=> {
+      // overide end()
+      this.end = (status)=>{
+        this.quit(status);
+        cb();
+      }
+      this.set({'status.waiting': false});
+      try {
+        const code_snippets = this.get_widget('code_snippets');
+        if('worker_js' in code_snippets){
+          vm.runInNewContext(code_snippets['worker_js'].content, this.context);
+        }
+        else{
+          console.log('worker.js not found.');
+          this.set({'status.info': 'worker.js not found.'});
+        }
+      } catch (e) {
+        console.error(e);
+        this.set({'status.error': e.toString()});
+        this.end();
+      }
+    });
+  }
+  else if(cmd == 'stop'){
+    if(this.process) this.process.kill();
+  }
+  this.set({'cmd': ''});
+  // clearTimeout(this.quit_timer);
+}
 // /*
 //  * If you need to do something specific on close or errors.
 //  * You can also disable autoReconnect and
@@ -286,12 +291,17 @@ Task.prototype.execute = function(cmd){
 // */
 ddpclient.on('socket-close', function(code, message) {
   console.log("Close: %s %s", code, message);
-  worker_set({status:'close'});
+
 });
 
 ddpclient.on('socket-error', function(error) {
   console.log("Error: %j", error);
-  worker_set({status:'error'});
+});
+
+process.on('SIGINT', ()=>{
+    console.log("interrupting...");
+    worker_set({status:'exit'});
+    process.exit();
 });
 
 /*
