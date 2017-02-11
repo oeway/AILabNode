@@ -240,10 +240,6 @@ Task.prototype.get_widget = function(key){
   return ddpclient.collections.widgets[wid];
 }
 Task.prototype.init = function(process){
-  process.stderr.on('data', (data) => {
-    console.error('stderr: ' + data.toString());
-    this.set({'status.error': data.toString()});
-  });
   process.on('close', (code) => {
     console.log('exited with code: ' + code);
     this.end('exited:' + code);
@@ -257,6 +253,7 @@ Task.prototype.quit = function(msg){
   this.set(m);
 }
 Task.prototype.execute = function(cmd){
+  cmd = cmd || this.get('cmd');
   if(cmd == 'run'){
     this.set({'status.waiting': true});
     task_queue.push((cb)=> {
