@@ -19,6 +19,7 @@
   "homepage": "https://github.com/oeway/AILabNode#readme",
   "dependencies": {
     "ddp": "^0.12.1",
+    "mkdirp": "^0.5.1",
     "queue": "^4.2.1"
   }
 }
