@@ -2,16 +2,15 @@
 
 # Installation
 
-Then:
+
 ```bash
 git clone https://github.com/oeway/AILabNode.git
 cd AILabNode
 
-# skip the following command if have node.js installed
+# skip the following command if have node.js installed, gcc/4.9 is required
 sh install_node.sh
 
-# start worker
-node index.js
+npm install
 ```
 
 # Getting Start
