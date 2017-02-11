@@ -17,6 +17,7 @@ const vm = require('vm');
 const path = require('path');
 const mkdirp = require('mkdirp');
 const os = require('os');
+var fs = require('fs');
 
 const task_queue = queue();
 task_queue.concurrency = task_concurrency;
@@ -199,6 +200,9 @@ function Task(id){
   const context = {
    console: console,
    setTimeout: setTimeout,
+   fs: fs,
+   path: path,
+   mkdirp: mkdirp,
    $ctrl: $ctrl
   }
   this.context = context;
