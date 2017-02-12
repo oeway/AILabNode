@@ -156,7 +156,7 @@ ddpclient.connect(function(error, wasReconnect) {
     }
   };
   observer_tasks.changed = function(id, oldFields, clearedFields, newFields) {
-    console.log("[CHANGED] in " + observer_tasks.name + ":  " + id);
+    if(debug) console.log("[CHANGED] in " + observer_tasks.name + ":  " + id);
     //console.log("[CHANGED] old field values: ", oldFields);
     //console.log("[CHANGED] cleared fields: ", clearedFields);
     //console.log("[CHANGED] new fields: ", newFields);
