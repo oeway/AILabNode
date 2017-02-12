@@ -245,7 +245,7 @@ Task.prototype.init = function(process){
     this.end('exited:' + code);
   });
   this.process = process;
-  this.set({'status.stage':'init', 'status.info':'','status.error':'', 'status.running': true});
+  this.set({'status.stage':'running', 'status.info':'','status.error':'', 'status.running': true});
 }
 Task.prototype.quit = function(msg){
   const m = {'status.running': false, 'status.waiting':false, visible2worker:false};
