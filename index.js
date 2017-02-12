@@ -99,7 +99,11 @@ ddpclient.connect(function(error, wasReconnect) {
       console.log('worker subscribed.');
       //console.log(ddpclient.collections.workers);
       if(ddpclient.collections.workers[worker_id]){
-        console.log('worker found: '+ ddpclient.collections.workers[worker_id].name)
+        console.log('worker found: '+ ddpclient.collections.workers[worker_id].name);
+        task_queue.autostart = true;
+        worker_set({status:'ready', version: worker_version, name: os.hostname()+'('+worker_id.slice(0, 4)+')'});
+        setInterval(function(){ worker_set({'resources.date_time':new Date().toLocaleString()}); }, 3000);
+
         ddpclient.subscribe(
           'widgets.worker',                  // name of Meteor Publish function to subscribe to
           [worker_id, worker_token],         // any parameters used by the Publish function
@@ -112,9 +116,6 @@ ddpclient.connect(function(error, wasReconnect) {
           [worker_id, worker_token],       // any parameters used by the Publish function
           function (error) {
             console.log('tasks subscribed.');
-            task_queue.autostart = true;
-            worker_set({status:'ready', version: worker_version, name: os.hostname()+'('+worker_id.slice(0, 4)+')'});
-            setInterval(function(){ worker_set({'resources.date_time':new Date().toLocaleString()}); }, 3000);
             //console.log(ddpclient.collections.tasks);
         });
       }
