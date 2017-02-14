@@ -256,7 +256,6 @@ Task.prototype.quit = function(msg){
 Task.prototype.execute = function(cmd){
   cmd = cmd || this.get('cmd');
   if(cmd == 'run' && !this.get('status.running') && !this.get('status.waiting')){
-    this.set({'status.waiting': true});
     task_queue.push((cb)=> {
       // overide end()
       this.end = (status)=>{
@@ -279,6 +278,7 @@ Task.prototype.execute = function(cmd){
         this.end();
       }
     });
+    this.set({'status.waiting': true, 'status.stage': 'enqueued'});
   }
   else if(cmd == 'stop'){
     if(this.process) this.process.kill();
