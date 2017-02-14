@@ -255,7 +255,7 @@ Task.prototype.quit = function(msg){
 }
 Task.prototype.execute = function(cmd){
   cmd = cmd || this.get('cmd');
-  if(cmd == 'run'){
+  if(cmd == 'run' && !this.get('status.running') && !this.get('status.waiting')){
     this.set({'status.waiting': true});
     task_queue.push((cb)=> {
       // overide end()
