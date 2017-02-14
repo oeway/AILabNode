@@ -40,8 +40,8 @@ process.stdout.on('data', (data)=>{
 $ctrl.task.init(process);
 ```
 
-# The real-time 3-way binding of the `$ctrl.task` object
-To enable a simple seamless communication between the web GUI and the worker, AILab has an javascript object which is synchronized in realtime between the web GUI and the worker, which can be access with `$ctrl.task`. It's a json object with the following structure:
+# The 3-way binding of the `$ctrl.task` object
+To enable a simple and seamless communication between the web GUI and the worker, AILab has an javascript object which is synchronized in real-time between the web GUI and the worker, which can be access with `$ctrl.task`. It's a json object with the following structure:
 ```json
 {
 "name": "my task",
@@ -57,7 +57,7 @@ To enable a simple seamless communication between the web GUI and the worker, AI
   }
 }
 ```
-Generally, you can change any of the above fields by using `$ctrl.task.set(key, value)` syntax as you want, but they are designed for different purpose. Here is a general guide for using these fields:
+Generally, you can change any of the above fields by using `$ctrl.task.set(key, value)` syntax, but they are designed for different purposes. Here is a general guide for using these fields:
  * use `$ctrl.task.config` for saving and updating settings, configurations of the task.
  * use `$ctrl.task.input` for the input of the task, usually, it can be a file path, an url, some numbers or string which generate by another task.
  * use `$ctrl.task.output` for the output of the task, it can be a file path or url, some numbers or string produced by the task.
