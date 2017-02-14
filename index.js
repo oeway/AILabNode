@@ -1,13 +1,27 @@
-const worker_id='';
-const worker_token='';
-const host = 'ai.pasteur.fr';
-const port = 443;
-const ssl = true;
-const workdir='./dai-workdir';
-const debug = false;
+#!/usr/bin/env node
 const worker_version = '0.1';
-const task_concurrency = 10;
-const task_timeout = 10*24*60*60; //10 days maximum
+const argv = require('yargs')
+      .default({ worker_id : "",
+                worker_token : "",
+                host: 'ai.pasteur.fr',
+                port: 443,
+                ssl: true,
+                workdir: './dai-workdir',
+                debug: false,
+                concurrency: 10,
+                timeout: 10*24*60*60 //10 days maximum
+               })
+      .argv;
+
+const worker_id=argv.worker_id;
+const worker_token=argv.worker_token;
+const host = argv.host;
+const port = argv.port;
+const ssl = argv.ssl;
+const workdir= argv.workdir;
+const debug = argv.debug;
+const task_concurrency = argv.concurrency;
+const task_timeout = argv.timeout; //10 days maximum
 
 
 const DDPClient = require("ddp");
