@@ -41,7 +41,7 @@ $ctrl.task.init(process);
 ```
 
 # The 3-way binding of the `$ctrl.task` object
-To enable a simple and seamless communication between the web GUI and the worker, AILab has an javascript object which is synchronized in real-time between the web GUI and the worker, which can be access with `$ctrl.task`. It's a json object with the following structure:
+To enable a simple and seamless communication between the web GUI and the worker, AILab has an javascript object which is synchronized in real-time between the web GUI, the server database and the worker(3-way binding). It's a json object can be accessed with `$ctrl.task`, and has the following structure:
 ```json
 {
 "name": "my task",
