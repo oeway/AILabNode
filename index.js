@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 const worker_version = '0.1';
 const argv = require('yargs')
-      .default({ worker_id : "",
-                worker_token : "",
+      .default({ id : "",
+                token : "",
                 host: 'ai.pasteur.fr',
                 port: 443,
                 ssl: true,
@@ -13,8 +13,8 @@ const argv = require('yargs')
                })
       .argv;
 
-const worker_id=argv.worker_id;
-const worker_token=argv.worker_token;
+const worker_id=argv.id;
+const worker_token=argv.token;
 const host = argv.host;
 const port = argv.port;
 const ssl = argv.ssl;
