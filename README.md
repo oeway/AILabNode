@@ -67,5 +67,17 @@ Generally, you can change any of the above fields by using `$ctrl.task.set(key, 
  * use `$ctrl.task.get(key)` syntax to get value, for example: `var x = $ctrl.task.get("config.x");`
  
 Once you set the variables, it will be synchronized across all the web pages and the worker in real-time, it's a reactive 3-way binding.
+So it will enables you to take input form the web GUI and use it immediately on the worker. For example:
+In the `PANEL.html`, you have:
+```html
+x: <input type="number" ng-model="$ctrl.task.config.x">
+y: {{$ctrl.task.output.y}}
+```
+And you can do this in the `worker.js`:
+```javascript
+x = $ctrl.task.get('config.x');
+y = x*23+8;
 
-
+$ctrl.task.set('output.y', y);
+// then you should be able to see the updated y on your web GUI.
+```
