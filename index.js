@@ -115,6 +115,10 @@ ddpclient.connect(function(error, wasReconnect) {
       if(ddpclient.collections.workers[worker_id]){
         console.log('worker found: '+ ddpclient.collections.workers[worker_id].name);
         task_queue.autostart = true;
+        if(wasReconnect){
+            console.log("Resuming the task queue...")
+            task_queue.start((err)=>{console.log('queue is empty or an error occured')});
+        }
         worker_set({status:'ready', version: worker_version, name: os.hostname()+'('+worker_id.slice(0, 4)+')'});
         setInterval(function(){ worker_set({'resources.date_time':new Date().toLocaleString()}); }, 3000);
 
@@ -270,7 +274,9 @@ Task.prototype.quit = function(msg){
 Task.prototype.execute = function(cmd){
   cmd = cmd || this.get('cmd');
   if(cmd == 'run' && !this.get('status.running') && !this.get('status.waiting')){
+    worker_set({'resources.queue_length': task_queue.length});
     task_queue.push((cb)=> {
+      worker_set({'resources.queue_length': task_queue.length});
       // overide end()
       this.end = (status)=>{
         this.quit(status);
@@ -306,12 +312,14 @@ Task.prototype.execute = function(cmd){
 //  * call ddpclient.connect() when you are ready to re-connect.
 // */
 ddpclient.on('socket-close', function(code, message) {
-  console.log("Close: %s %s", code, message);
-
+  console.log("Socket Close: %s %s", code, message);
+  task_queue.stop();
+  console.log("Task Queue stopped.")
 });
 
 ddpclient.on('socket-error', function(error) {
-  console.log("Error: %j", error);
+  console.log("Socket Error: %j", error);
+  // task_queue.stop();
 });
 
 process.on('SIGINT', ()=>{
