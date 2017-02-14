@@ -24,17 +24,23 @@ Then, to run the actual worker, you can open a terminal window and type the foll
 node index.js
 ```
 
-And you will see the worker running on the platform, now you are ready to go, try to create a widget and add the worker you just created. In the "Code" tab in a widget editor, you can add one code file named "worker.js" with the type "javascript" which will perform the actuall task on the worker node.
+And you will see the worker running on the platform, now you are ready to go, try to create a widget and add the worker you just created. In the "Code" tab in a widget editor, you can add one code file named "WORKER.js" with the type "javascript" which will perform the actuall task on the worker node.
 
 ```js
 const cmd = 'python';
 const args = ['-c', 'print("hello world")'];
+const workdir = $ctrl.task.workdir;
 
-const process = $ctrl.child_process.spawn(cmd, args, {cwd:$ctrl.task.workdir});
+//create a process with the command and args
+const process = $ctrl.child_process.spawn(cmd, args, {cwd: workdir});
+
+//process the output string from the command line
 process.stdout.on('data', (data)=>{
-  console.log(data.toString());
-  // parse the console output here
-  $ctrl.task.set({'status.info': data.toString()});
+  const line = data.toString();
+  // parse the console output line here
+  console.log(line);
+  $ctrl.task.set({'status.info': line});
+  $ctrl.task.set({'status.progress': 100});
 });
 
 $ctrl.task.init(process);
@@ -73,7 +79,7 @@ In the `PANEL.html`, you have:
 x: <input type="number" ng-model="$ctrl.task.config.x">
 y: {{$ctrl.task.output.y}}
 ```
-And you can do this in the `worker.js`:
+And you can do this in the `WORKER.js`:
 ```javascript
 x = $ctrl.task.get('config.x');
 y = x*23+8;
