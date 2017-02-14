@@ -1,5 +1,5 @@
-const worker_id='DqnzfdRssa7w68tPc';
-const worker_token='E3nMrYYvezC';
+const worker_id='';
+const worker_token='';
 const host = 'ai.pasteur.fr';
 const port = 443;
 const ssl = true;
