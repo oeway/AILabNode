@@ -267,7 +267,7 @@ Task.prototype.init = function(process){
   this.set({'status.stage':'running', 'status.info':'','status.error':'', 'status.running': true});
 }
 Task.prototype.quit = function(msg){
-  const m = {'status.running': false, 'status.waiting':false, visible2worker:false};
+  const m = {'status.running': false, 'status.waiting':false, 'visible2worker':false};
   m['status.stage'] = msg || 'exited';
   this.set(m);
 }
@@ -286,15 +286,16 @@ Task.prototype.execute = function(cmd){
       try {
         const code_snippets = this.get_widget('code_snippets');
         if('WORKER_js' in code_snippets){
-          vm.runInNewContext(code_snippets['worker_js'].content, this.context);
+          vm.runInNewContext(code_snippets['WORKER_js'].content, this.context);
         }
         else{
           console.log('WORKER.js not found.');
-          this.set({'status.info': 'WORKER.js not found.'});
+          this.set({'status.error': 'WORKER.js not found.', 'status.stage': 'abort'});
+          this.end();
         }
       } catch (e) {
         console.error(e);
-        this.set({'status.error': e.toString()});
+        this.set({'status.error': e.toString(), 'status.stage': 'abort'});
         this.end();
       }
     });
