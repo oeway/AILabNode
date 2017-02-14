@@ -265,12 +265,12 @@ Task.prototype.execute = function(cmd){
       this.set({'status.waiting': false});
       try {
         const code_snippets = this.get_widget('code_snippets');
-        if('worker_js' in code_snippets){
+        if('WORKER_js' in code_snippets){
           vm.runInNewContext(code_snippets['worker_js'].content, this.context);
         }
         else{
-          console.log('worker.js not found.');
-          this.set({'status.info': 'worker.js not found.'});
+          console.log('WORKER.js not found.');
+          this.set({'status.info': 'WORKER.js not found.'});
         }
       } catch (e) {
         console.error(e);
