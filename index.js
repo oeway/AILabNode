@@ -210,28 +210,71 @@ function Task(id){
   this.end = this.quit;
   // this.quit_timer = setTimeout(()=>{ console.log('time out'); this.quit();}, 30000);
 }
-Task.prototype.get = function(k){
-  return ddpclient.collections.tasks[this.id][k];
+Task.prototype.get = function(key){
+  try{
+    const keys = key.split('.');
+    let v = ddpclient.collections.tasks[this.id];
+    for(let i in keys){
+      v = v[keys[i]];
+    }
+    return v;
+  }
+  catch(e){
+    return undefined;
+  }
 }
-Task.prototype.set= function(v){
-  ddpclient.call("tasks.update.worker", [this.id, worker_id, worker_token, {'$set': v}], function (err, result) {
+Task.prototype.set= function(key, value){
+  let doc = {};
+  if(typeof key == 'object'){
+    doc = key;
+  }
+  else{
+    doc[key] = value
+  }
+  ddpclient.call("tasks.update.worker", [this.id, worker_id, worker_token, {'$set': doc}], function (err, result) {
     if(err) console.error('task set error:', err);
   });
 }
-Task.prototype.push= function(v){
-  ddpclient.call("tasks.update.worker", [this.id, worker_id, worker_token, {'$push': v}], function (err, result) {
+Task.prototype.push= function(key, value){
+  let doc = {};
+  if(typeof key == 'object'){
+    doc = key;
+  }
+  else{
+    doc[key] = value
+  }
+  ddpclient.call("tasks.update.worker", [this.id, worker_id, worker_token, {'$push': doc}], function (err, result) {
     if(err) console.error('task push error:', err);
   });
 }
-Task.prototype.pull= function(v){
-  ddpclient.call("tasks.update.worker", [this.id, worker_id, worker_token, {'$pull': v}], function (err, result) {
+Task.prototype.pull= function(key, value){
+  let doc = {};
+  if(typeof key == 'object'){
+    doc = key;
+  }
+  else{
+    doc[key] = value
+  }
+  ddpclient.call("tasks.update.worker", [this.id, worker_id, worker_token, {'$pull': doc}], function (err, result) {
     if(err) console.error('task pull error:', err);
   });
 }
-Task.prototype.addToSet= function(v){
-  ddpclient.call("tasks.update.worker", [this.id, worker_id, worker_token, {'$addToSet': v}], function (err, result) {
+Task.prototype.addToSet= function(key, value){
+  let doc = {};
+  if(typeof key == 'object'){
+    doc = key;
+  }
+  else{
+    doc[key] = value
+  }
+  ddpclient.call("tasks.update.worker", [this.id, worker_id, worker_token, {'$addToSet': doc}], function (err, result) {
     if(err) console.error('task addToSet error:', err);
   });
+}
+Task.prototype.getWidgetCode(name){
+  const key = name.replace(/\./g, '_');
+  const wid = ddpclient.collections.tasks[this.id]['widgetId'];
+  return ddpclient.collections.widgets[wid].code_snippets[key].content
 }
 Task.prototype.get_widget = function(key){
   const wid = ddpclient.collections.tasks[this.id]['widgetId'];
