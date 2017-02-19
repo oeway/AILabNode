@@ -1,13 +1,27 @@
-const worker_id='DqnzfdRssa7w68tPc';
-const worker_token='E3nMrYYvezC';
-const host = 'ai.pasteur.fr';
-const port = 443;
-const ssl = true;
-const workdir='./dai-workdir';
-const debug = false;
+#!/usr/bin/env node
 const worker_version = '0.1';
-const task_concurrency = 10;
-const task_timeout = 10*24*60*60; //10 days maximum
+const argv = require('yargs')
+      .default({ id : "",
+                token : "",
+                host: 'ai.pasteur.fr',
+                port: 443,
+                ssl: true,
+                workdir: './dai-workdir',
+                debug: false,
+                concurrency: 10,
+                timeout: 10*24*60*60 //10 days maximum
+               })
+      .argv;
+
+const worker_id=argv.id;
+const worker_token=argv.token;
+const host = argv.host;
+const port = argv.port;
+const ssl = argv.ssl;
+const workdir= argv.workdir;
+const debug = argv.debug;
+const task_concurrency = argv.concurrency;
+const task_timeout = argv.timeout; //10 days maximum
 
 
 const DDPClient = require("ddp");
@@ -101,6 +115,10 @@ ddpclient.connect(function(error, wasReconnect) {
       if(ddpclient.collections.workers[worker_id]){
         console.log('worker found: '+ ddpclient.collections.workers[worker_id].name);
         task_queue.autostart = true;
+        if(wasReconnect){
+            console.log("Resuming the task queue...")
+            task_queue.start((err)=>{console.log('queue is empty or an error occured')});
+        }
         worker_set({status:'ready', version: worker_version, name: os.hostname()+'('+worker_id.slice(0, 4)+')'});
         setInterval(function(){ worker_set({'resources.date_time':new Date().toLocaleString()}); }, 3000);
 
@@ -292,15 +310,16 @@ Task.prototype.init = function(process){
   this.set({'status.stage':'running', 'status.info':'','status.error':'', 'status.running': true});
 }
 Task.prototype.quit = function(msg){
-  const m = {'status.running': false, 'status.waiting':false, visible2worker:false};
+  const m = {'status.running': false, 'status.waiting':false, 'visible2worker':false};
   m['status.stage'] = msg || 'exited';
   this.set(m);
 }
 Task.prototype.execute = function(cmd){
   cmd = cmd || this.get('cmd');
-  if(cmd == 'run'){
-    this.set({'status.waiting': true});
+  if(cmd == 'run' && !this.get('status.running') && !this.get('status.waiting')){
+    worker_set({'resources.queue_length': task_queue.length});
     task_queue.push((cb)=> {
+      worker_set({'resources.queue_length': task_queue.length});
       // overide end()
       this.end = (status)=>{
         this.quit(status);
@@ -309,19 +328,21 @@ Task.prototype.execute = function(cmd){
       this.set({'status.waiting': false});
       try {
         const code_snippets = this.get_widget('code_snippets');
-        if('worker_js' in code_snippets){
-          vm.runInNewContext(code_snippets['worker_js'].content, this.context);
+        if('WORKER_js' in code_snippets){
+          vm.runInNewContext(code_snippets['WORKER_js'].content, this.context);
         }
         else{
-          console.log('worker.js not found.');
-          this.set({'status.info': 'worker.js not found.'});
+          console.log('WORKER.js not found.');
+          this.set({'status.error': 'WORKER.js not found.', 'status.stage': 'abort'});
+          this.end();
         }
       } catch (e) {
         console.error(e);
-        this.set({'status.error': e.toString()});
+        this.set({'status.error': e.toString(), 'status.stage': 'abort'});
         this.end();
       }
     });
+    this.set({'status.waiting': true, 'status.stage': 'enqueued'});
   }
   else if(cmd == 'stop'){
     if(this.process) this.process.kill();
@@ -335,12 +356,14 @@ Task.prototype.execute = function(cmd){
 //  * call ddpclient.connect() when you are ready to re-connect.
 // */
 ddpclient.on('socket-close', function(code, message) {
-  console.log("Close: %s %s", code, message);
-
+  console.log("Socket Close: %s %s", code, message);
+  task_queue.stop();
+  console.log("Task Queue stopped.")
 });
 
 ddpclient.on('socket-error', function(error) {
-  console.log("Error: %j", error);
+  console.log("Socket Error: %j", error);
+  // task_queue.stop();
 });
 
 process.on('SIGINT', ()=>{
