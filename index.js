@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 const worker_version = '0.1';
 const argv = require('yargs')
-      .default({ id : "",
+      .default({id : "",
                 token : "",
                 host: 'ai.pasteur.fr',
                 port: 443,
                 ssl: true,
                 workdir: './dai-workdir',
+                dropbox_token: null,
                 debug: false,
                 concurrency: 10,
                 timeout: 10*24*60*60 //10 days maximum
                })
       .argv;
+
+console.log(argv);
 
 const worker_id=argv.id;
 const worker_token=argv.token;
@@ -22,7 +25,18 @@ const workdir= argv.workdir;
 const debug = argv.debug;
 const task_concurrency = argv.concurrency;
 const task_timeout = argv.timeout; //10 days maximum
+const dropbox_access_token = argv.dropbox_token;
 
+const utils = require('./utils.js');
+
+let dropbox = undefined;
+if(dropbox_access_token){
+  const Dropbox = require('dropbox');
+  dropbox = new Dropbox({ accessToken: dropbox_access_token });
+  dropbox.uploadFile = (filePath, uploadPath, chunk_size)=>{
+    return utils.dropbox_file_upload(dropbox, filePath, uploadPath, chunk_size);
+  };
+}
 
 const DDPClient = require("ddp");
 const queue = require('queue');
@@ -112,7 +126,7 @@ ddpclient.connect(function(error, wasReconnect) {
     function () {             // callback when the subscription is complete
       console.log('worker subscribed.');
       //console.log(ddpclient.collections.workers);
-      if(ddpclient.collections.workers[worker_id]){
+      if(ddpclient.collections.workers && ddpclient.collections.workers[worker_id]){
         console.log('worker found: '+ ddpclient.collections.workers[worker_id].name);
         task_queue.autostart = true;
         if(wasReconnect){
@@ -138,8 +152,8 @@ ddpclient.connect(function(error, wasReconnect) {
         });
       }
       else{
-        console.log('worker not found.')
-        return;
+        console.log('ERROR: worker not found.')
+        ddpclient.close();
       }
     }
   );
@@ -169,7 +183,11 @@ ddpclient.connect(function(error, wasReconnect) {
     console.log("[ADDED] to " + observer_tasks.name + ":  " + id);
     const task = new Task(id);
     tasks[id] = task;
-    if(task.get('cmd')){
+    if(task.get('status.running') || task.get('status.waiting')){
+      task.set({ 'status.error': 'worker restarted unexpectedly'});
+      task.close('aborted');
+    }
+    else if(task.get('cmd') && task.get('cmd') != ''){
       task.execute(task.get('cmd'));
     }
   };
@@ -208,6 +226,7 @@ function worker_set(v){
 const tasks = {}
 function Task(id){
   this.id = id;
+  this.process = null;
   this.workdir = path.join(workdir, 'widget-'+this.get_widget('_id'), 'task-'+this.id);
   mkdirp(this.workdir, function(err) {
     if(err) console.error(err);
@@ -217,15 +236,17 @@ function Task(id){
     child_process: child_process,
   };
   const context = {
+   Buffer: Buffer,
    console: console,
    setTimeout: setTimeout,
    fs: fs,
    path: path,
    mkdirp: mkdirp,
+   dropbox: dropbox,
    $ctrl: $ctrl
   }
   this.context = context;
-  this.end = this.quit;
+  this.close = this.quit;
   // this.quit_timer = setTimeout(()=>{ console.log('time out'); this.quit();}, 30000);
 }
 Task.prototype.get = function(k){
@@ -261,7 +282,7 @@ Task.prototype.get_widget = function(key){
 Task.prototype.init = function(process){
   process.on('close', (code) => {
     console.log('exited with code: ' + code);
-    this.end('exited:' + code);
+    this.close('exited:' + code);
   });
   this.process = process;
   this.set({'status.stage':'running', 'status.info':'','status.error':'', 'status.running': true});
@@ -275,37 +296,92 @@ Task.prototype.execute = function(cmd){
   cmd = cmd || this.get('cmd');
   if(cmd == 'run' && !this.get('status.running') && !this.get('status.waiting')){
     worker_set({'resources.queue_length': task_queue.length});
+
     task_queue.push((cb)=> {
       worker_set({'resources.queue_length': task_queue.length});
-      // overide end()
-      this.end = (status)=>{
+      // overide close()
+      this.close = (status)=>{
         this.quit(status);
         cb();
       }
-      this.set({'status.waiting': false});
+      // TODO: remove this
+      this.end = this.close;
       try {
+        this.set({'cmd': ''});
         const code_snippets = this.get_widget('code_snippets');
         if('WORKER_js' in code_snippets){
-          vm.runInNewContext(code_snippets['WORKER_js'].content, this.context);
+          console.log('executing task: ' + this.id);
+          this.set({'status.running': true, 'status.waiting': false, 'status.stage': 'running', 'status.error':'', 'status.info':''});
+          const script = new vm.Script(code_snippets['WORKER_js'].content, {
+            filename: code_snippets['WORKER_js'].name, // filename for stack traces
+            lineOffset: 1, // line number offset to be used for stack traces
+            columnOffset: 1, // column number offset to be used for stack traces
+            displayErrors: true,
+            timeout: 60000 // ms
+          });
+          script.runInNewContext(this.context, {timeout:60000});
+          // if(!this.process){
+          //   this.close('done');
+          // }
         }
         else{
           console.log('WORKER.js not found.');
           this.set({'status.error': 'WORKER.js not found.', 'status.stage': 'abort'});
-          this.end();
+          this.close();
         }
       } catch (e) {
         console.error(e);
         this.set({'status.error': e.toString(), 'status.stage': 'abort'});
-        this.end();
+        this.close();
       }
-    });
-    this.set({'status.waiting': true, 'status.stage': 'enqueued'});
+    })
   }
   else if(cmd == 'stop'){
+    this.set({'cmd': ''});
     if(this.process) this.process.kill();
+    this.close('aborted');
   }
-  this.set({'cmd': ''});
+  else{
+    this.set({'cmd': ''});
+  }
+
   // clearTimeout(this.quit_timer);
+}
+if(dropbox){
+  Task.prototype.uploadFile= function(file_name, chunk_size){
+    const upload_task_dir = '/'+ this.get('widgetId') + '/' + this.id ;
+    const file_path = path.join(this.workdir, file_name);
+    const upload_file_path = path.join(upload_task_dir, file_name);
+    return new Promise(function(resolve, reject) {
+      dropbox.filesGetMetadata({path: upload_task_dir, include_media_info: false, include_deleted: false})
+      .then(function(response) {
+          dropbox.uploadFile(file_path, upload_file_path, chunk_size).then(
+            (file_meta_data)=>{
+              resolve(file_meta_data);
+            },
+            (error)=>{
+              resolve(error);
+            }
+          );
+      })
+      .catch(function(error) {
+          dropbox.filesCreateFolder({path: upload_task_dir})
+          .then(function(response) {
+             dropbox.uploadFile(file_path, upload_file_path, chunk_size).then(
+               (file_meta_data)=>{
+                 resolve(file_meta_data);
+               },
+               (error)=>{
+                 resolve(error);
+               }
+             );
+          })
+          .catch(function(error) {
+            console.log(error);
+          });
+      });
+    });
+  };
 }
 // /*
 //  * If you need to do something specific on close or errors.
