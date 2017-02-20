@@ -63,36 +63,6 @@ task_queue.on('success', function(result, task) {
   // console.log('task finished processing:', task.toString().replace(/\n/g, ''));
 });
 
-const request = require('request');
-const download = function(url, dest, cb) {
-    var file = fs.createWriteStream(dest);
-    var sendReq = request.get(url);
-
-    // verify response code
-    sendReq.on('response', function(response) {
-        if (response.statusCode !== 200) {
-            return cb('Response status was ' + response.statusCode);
-        }
-    });
-
-    // check for request errors
-    sendReq.on('error', function (err) {
-        fs.unlink(dest);
-        return cb(err.message);
-    });
-
-    sendReq.pipe(file);
-
-    file.on('finish', function() {
-        file.close(cb);  // close() is async, call cb after close completes.
-    });
-
-    file.on('error', function(err) { // Handle errors
-        fs.unlink(dest); // Delete the file async. (But we don't check the result)
-        return cb(err.message);
-    });
-};
-
 const ddpclient = new DDPClient({
   // All properties optional, defaults shown
   host : host,
@@ -426,7 +396,7 @@ if(dropbox){
     // replace for dropbox
     url = url.split("?dl=0").join("?dl=1");
     return new Promise((resolve, reject)=>{
-      download(url, path.join(this.workdir, filename), resolve);
+      utils.download(url, path.join(this.workdir, filename), resolve);
     });
   };
   Task.prototype.saveDownloadUrl = function(url, filename){
