@@ -45,7 +45,7 @@ const vm = require('vm');
 const path = require('path');
 const mkdirp = require('mkdirp');
 const os = require('os');
-var fs = require('fs');
+const fs = require('fs');
 
 const task_queue = queue();
 task_queue.concurrency = task_concurrency;
@@ -62,6 +62,36 @@ task_queue.on('success', function(result, task) {
   console.log('task finished.');
   // console.log('task finished processing:', task.toString().replace(/\n/g, ''));
 });
+
+const request = require('request');
+const download = function(url, dest, cb) {
+    var file = fs.createWriteStream(dest);
+    var sendReq = request.get(url);
+
+    // verify response code
+    sendReq.on('response', function(response) {
+        if (response.statusCode !== 200) {
+            return cb('Response status was ' + response.statusCode);
+        }
+    });
+
+    // check for request errors
+    sendReq.on('error', function (err) {
+        fs.unlink(dest);
+        return cb(err.message);
+    });
+
+    sendReq.pipe(file);
+
+    file.on('finish', function() {
+        file.close(cb);  // close() is async, call cb after close completes.
+    });
+
+    file.on('error', function(err) { // Handle errors
+        fs.unlink(dest); // Delete the file async. (But we don't check the result)
+        return cb(err.message);
+    });
+};
 
 const ddpclient = new DDPClient({
   // All properties optional, defaults shown
@@ -227,7 +257,8 @@ const tasks = {}
 function Task(id){
   this.id = id;
   this.process = null;
-  this.workdir = path.join(workdir, 'widget-'+this.get_widget('_id'), 'task-'+this.id);
+  this.workdir = path.join(workdir, 'widget-' + this.get('widgetId'), 'task-'+this.id);
+  if(dropbox) this.dropboxPath = '/widget-' + this.get('widgetId') + '/task-'+ this.id;
   mkdirp(this.workdir, function(err) {
     if(err) console.error(err);
   });
@@ -310,12 +341,12 @@ Task.prototype.addToSet= function(key, value){
     if(err) console.error('task addToSet error:', err);
   });
 }
-Task.prototype.getWidgetCode(name){
+Task.prototype.getWidgetCode = function(name){
   const key = name.replace(/\./g, '_');
   const wid = ddpclient.collections.tasks[this.id]['widgetId'];
-  return ddpclient.collections.widgets[wid].code_snippets[key].content
+  return ddpclient.collections.widgets[wid].code_snippets[key].content;
 }
-Task.prototype.get_widget = function(key){
+Task.prototype.getWidget = function(key){
   const wid = ddpclient.collections.tasks[this.id]['widgetId'];
   if(key){
     return ddpclient.collections.widgets[wid][key];
@@ -351,7 +382,7 @@ Task.prototype.execute = function(cmd){
       this.end = this.close;
       try {
         this.set({'cmd': ''});
-        const code_snippets = this.get_widget('code_snippets');
+        const code_snippets = this.getWidget('code_snippets');
         if('WORKER_js' in code_snippets){
           console.log('executing task: ' + this.id);
           this.set({'status.running': true, 'status.waiting': false, 'status.stage': 'running', 'status.error':'', 'status.info':''});
@@ -391,11 +422,31 @@ Task.prototype.execute = function(cmd){
   // clearTimeout(this.quit_timer);
 }
 if(dropbox){
+  Task.prototype.downloadUrl = function(url, filename){
+    url = url.split("?dl=0").join("?dl=1");
+    return new Promise((resolve, reject)=>{
+      download(url, path.join(this.workdir, filename), resolve);
+    });
+  };
+  Task.prototype.saveDownloadUrl = function(url, filename){
+    return new Promise((resolve, reject)=>{
+      url = url.split("?dl=0").join("?dl=1");
+      console.log(filename);
+      dropbox.filesSaveUrl({path: this.dropboxPath + '/' + filename, url:url}).then((result)=>{
+        console.log(result);
+      },(err)=>{
+        reject(err);
+      });
+      this.downloadUrl(url, filename).then(()=>{
+        resolve(filename);
+      });
+    });
+  };
   Task.prototype.uploadFile= function(file_name, chunk_size){
     const upload_task_dir = '/'+ this.get('widgetId') + '/' + this.id ;
     const file_path = path.join(this.workdir, file_name);
     const upload_file_path = path.join(upload_task_dir, file_name);
-    return new Promise(function(resolve, reject) {
+    return new Promise((resolve, reject)=>{
       dropbox.filesGetMetadata({path: upload_task_dir, include_media_info: false, include_deleted: false})
       .then(function(response) {
           dropbox.uploadFile(file_path, upload_file_path, chunk_size).then(
