@@ -293,7 +293,7 @@ Task.prototype.get = function(key){
     return undefined;
   }
 }
-Task.prototype.set= function(key, value){
+Task.prototype.set = function(key, value){
   let doc = {};
   if(typeof key == 'object'){
     doc = key;
@@ -423,6 +423,7 @@ Task.prototype.execute = function(cmd){
 }
 if(dropbox){
   Task.prototype.downloadUrl = function(url, filename){
+    // replace for dropbox
     url = url.split("?dl=0").join("?dl=1");
     return new Promise((resolve, reject)=>{
       download(url, path.join(this.workdir, filename), resolve);
@@ -430,8 +431,8 @@ if(dropbox){
   };
   Task.prototype.saveDownloadUrl = function(url, filename){
     return new Promise((resolve, reject)=>{
+      // replace for dropbox
       url = url.split("?dl=0").join("?dl=1");
-      console.log(filename);
       dropbox.filesSaveUrl({path: this.dropboxPath + '/' + filename, url:url}).then((result)=>{
         console.log(result);
       },(err)=>{
@@ -439,34 +440,57 @@ if(dropbox){
       });
       this.downloadUrl(url, filename).then(()=>{
         resolve(filename);
+      }).catch(function(error) {
+        console.log(error);
       });
     });
   };
-  Task.prototype.uploadFile= function(file_name, chunk_size){
-    const upload_task_dir = '/'+ this.get('widgetId') + '/' + this.id ;
-    const file_path = path.join(this.workdir, file_name);
-    const upload_file_path = path.join(upload_task_dir, file_name);
+  Task.prototype.getSharedLink = function(short_url) {
     return new Promise((resolve, reject)=>{
-      dropbox.filesGetMetadata({path: upload_task_dir, include_media_info: false, include_deleted: false})
+      dropbox.sharingCreateSharedLink({path:this.dropboxPath, short_url:short_url}).then((link)=>{
+        console.log(link.url);
+        resolve(link);
+      },(err)=>{
+        reject(err);
+      });
+    });
+  };
+  Task.prototype.uploadFile= function(file_name, chunk_size, create_shared_link){
+    const file_path = path.join(this.workdir, file_name);
+    const upload_file_path = this.dropboxPath + '/' + file_name;
+    create_shared_link = create_shared_link || true;
+    return new Promise((resolve, reject)=>{
+      dropbox.filesGetMetadata({path: this.dropboxPath, include_media_info: false, include_deleted: false})
       .then(function(response) {
           dropbox.uploadFile(file_path, upload_file_path, chunk_size).then(
             (file_meta_data)=>{
-              resolve(file_meta_data);
+              console.log('file uploaded:', file_meta_data);
+              if(create_shared_link){
+                dropbox.sharingCreateSharedLink({path:file_meta_data.path_lower, short_url:true}).then((link)=>{
+                  console.log(link.url);
+                  resolve(link);
+                },(err)=>{
+                  reject(err);
+                });
+              }
+              else{
+                resolve(file_meta_data);
+              }
             },
             (error)=>{
-              resolve(error);
+              reject(error);
             }
           );
       })
       .catch(function(error) {
           dropbox.filesCreateFolder({path: upload_task_dir})
-          .then(function(response) {
+          .then((response)=>{
              dropbox.uploadFile(file_path, upload_file_path, chunk_size).then(
                (file_meta_data)=>{
                  resolve(file_meta_data);
                },
                (error)=>{
-                 resolve(error);
+                 reject(error);
                }
              );
           })
