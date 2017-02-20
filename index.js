@@ -183,7 +183,7 @@ ddpclient.connect(function(error, wasReconnect) {
     console.log("[ADDED] to " + observer_tasks.name + ":  " + id);
     const task = new Task(id);
     tasks[id] = task;
-    if(task.get('status.running') || task.get('status.waiting')){
+    if(task.get('status.running')){
       task.set({ 'status.error': 'worker restarted unexpectedly'});
       task.close('aborted');
     }
@@ -332,13 +332,13 @@ Task.prototype.init = function(process){
   this.set({'status.stage':'running', 'status.info':'','status.error':'', 'status.running': true});
 }
 Task.prototype.quit = function(msg){
-  const m = {'status.running': false, 'status.waiting':false, 'visible2worker':false};
+  const m = {'status.running': false, 'isOpen':false};
   m['status.stage'] = msg || 'exited';
   this.set(m);
 }
 Task.prototype.execute = function(cmd){
   cmd = cmd || this.get('cmd');
-  if(cmd == 'run' && !this.get('status.running') && !this.get('status.waiting')){
+  if(cmd == 'run' && !this.get('status.running')){
     worker_set({'resources.queue_length': task_queue.length});
 
     task_queue.push((cb)=> {
@@ -355,7 +355,7 @@ Task.prototype.execute = function(cmd){
         const code_snippets = this.getWidget('code_snippets');
         if('WORKER_js' in code_snippets){
           console.log('executing task: ' + this.id);
-          this.set({'status.running': true, 'status.waiting': false, 'status.stage': 'running', 'status.error':'', 'status.info':''});
+          this.set({'status.running': true, 'status.stage': 'running', 'status.error':'', 'status.info':''});
           const script = new vm.Script(code_snippets['WORKER_js'].content, {
             filename: code_snippets['WORKER_js'].name, // filename for stack traces
             lineOffset: 1, // line number offset to be used for stack traces
