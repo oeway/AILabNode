@@ -238,6 +238,10 @@ const widgets = {};
 
 function Widget(id){
   this.id = id;
+  this.workdir = path.join(workdir, 'widget-' + this.id);
+  mkdirp(this.workdir, function(err) {
+    if(err) console.error(err);
+  });
   this.register();
 };
 
@@ -247,6 +251,7 @@ Widget.prototype.register = function(){
   if('WORKER_js' in code_snippets){
     try {
       console.log('widget updated: ' + this.id);
+      this.writeCodeFiles();
       for(k in tasks){
         if(tasks[k].widget.id == this.id)
           tasks[k].init();
@@ -261,6 +266,16 @@ Widget.prototype.register = function(){
   }
 };
 
+Widget.prototype.writeCodeFiles = function(){
+    const code_snippets = this.get('code_snippets');
+    for(let k in code_snippets){
+        fs.writeFile(path.join(this.workdir, code_snippets[k].name), code_snippets[k].content, function(err) {
+            if(err) {
+                console.error(err);
+            }
+        });
+    }
+}
 Widget.prototype.getCode = function(name){
   const key = name.replace(/\./g, '_');
   return ddpclient.collections.widgets[this.id].code_snippets[key].content;
