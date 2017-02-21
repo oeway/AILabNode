@@ -279,36 +279,6 @@ Widget.prototype.get = function(key){
     return undefined;
   }
 };
-// Widget.prototype.getFunction = function(task){
-//   return function (cb){
-//     worker_set({'resources.queue_length': task_queue.length});
-//     // overide close()
-//     task.close = (status)=>{
-//       task.quit(status);
-//       cb();
-//     }
-//     // TODO: remove this
-//     task.end = task.close;
-//     try {
-//       task.set({'cmd': ''});
-//       script = ...
-//       if(script){
-//         console.log('executing task: ' + task.id);
-//         task.set({'status.running': true, 'status.stage': 'running', 'status.error':'', 'status.info':''});
-//         script.runInNewContext(task.context, {timeout: task.widget.get('timeout') || 60000});
-//       }
-//       else{
-//         console.log('WORKER.js not found.');
-//         task.set({'status.error': 'WORKER.js not found.', 'status.stage': 'abort'});
-//         task.close();
-//       }
-//     } catch (e) {
-//       console.error(e);
-//       task.set({'status.error': e.toString(), 'status.stage': 'abort'});
-//       task.close();
-//     }
-//   }
-// };
 
 const tasks = {};
 function Task(id){
@@ -434,7 +404,10 @@ Task.prototype.stop = function(msg){
 }
 Task.prototype.quit = function(msg){
   const m = {'status.running': false, 'isOpen':false};
-  m['status.stage'] = msg || 'exited';
+  if(!msg || msg.endsWith('ing')){
+      msg = 'exited'
+  }
+  m['status.stage'] =  msg;
   this.set(m);
 }
 Task.prototype.execute = function(cmd){
@@ -446,12 +419,18 @@ Task.prototype.execute = function(cmd){
       else if(cmd == 'run' && !this.get('status.running')){
         if(this.$ctrl.run){
           task_queue.push((cb)=>{try {
+            task.set({'status.running': true, 'status.stage': 'running', 'status.error':'', 'status.info':''});
             this.$ctrl.run(cb);
             if(this.$ctrl.process){
                 this.$ctrl.process.on('close', (code) => {
                     cb();
-                    this.set('status.info', 'exited('+code+')');
-                    this.close();
+                    if(code == 0){
+                        msg = 'done'
+                    }
+                    else{
+                        msg = 'exited('+code+')'
+                    }
+                    this.close(msg);
                 });
             }
             else{
