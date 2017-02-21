@@ -311,8 +311,6 @@ function Task(id){
   }
   this.$ctrl = $ctrl;
   this.context = context;
-  this.close = this.quit;
-  // this.quit_timer = setTimeout(()=>{ console.log('time out'); this.quit();}, 30000);
 }
 Task.prototype.get = function(key){
   try{
@@ -402,8 +400,9 @@ Task.prototype.stop = function(msg){
   m['status.stage'] = msg || 'stopped';
   this.set(m);
 }
-Task.prototype.quit = function(msg){
-  const m = {'status.running': false};
+Task.prototype.close = function(msg, attach){
+  attach = attach || true;
+  const m = {'status.running': false, 'isOpen': attach};
   if(!msg || msg.endsWith('ing')){
       msg = 'exited'
   }
@@ -425,21 +424,23 @@ Task.prototype.execute = function(cmd){
                 this.$ctrl.process.on('close', (code) => {
                     cb();
                     if(code == 0){
-                        msg = 'done'
+                        msg = 'done';
                     }
                     else{
-                        msg = 'exited('+code+')'
+                        msg = 'exited('+code+')';
                     }
-                    this.close(msg);
+                    this.close(msg, false);
                 });
             }
             else{
                 cb();
+                this.close(msg, false);
             }
           } catch (e) {
             console.error(e);
             this.set('status.error', e.toString());
             cb();
+            this.close(msg, true);
           }});
           worker_set({'resources.queue_length': task_queue.length});
         }
@@ -457,7 +458,7 @@ Task.prototype.execute = function(cmd){
         else{
           this.set('status.info', '"$ctrl.stop" is not defined.');
         }
-        this.close('aborted');
+        this.close('aborted', true);
       }
       else{
         if(this.$ctrl[cmd]){
@@ -473,7 +474,6 @@ Task.prototype.execute = function(cmd){
   } finally {
       this.set({'cmd': ''});
   }
-  // clearTimeout(this.quit_timer);
 }
 if(dropbox){
   Task.prototype.downloadUrl = function(url, filename){
