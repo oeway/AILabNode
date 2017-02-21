@@ -306,6 +306,7 @@ function Task(id){
     if(err) console.error(err);
   });
   const $ctrl = {
+    widget: this.widget,
     task: this,
     child_process: child_process,
     run: ()=>{},
