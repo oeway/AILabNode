@@ -116,47 +116,47 @@ ddpclient.connect(function(error, wasReconnect) {
   //     }
   //   );
   // }, 3000);
-  if (!wasReconnect) {
-      /*
-       * Subscribe to a Meteor Collection
-       */
-      ddpclient.subscribe(
-        'workers.worker',                  // name of Meteor Publish function to subscribe to
-        [worker_id, worker_token],         // any parameters used by the Publish function
-        function () {             // callback when the subscription is complete
-          console.log('worker subscribed.');
-          //console.log(ddpclient.collections.workers);
-          if(ddpclient.collections.workers && ddpclient.collections.workers[worker_id]){
-            console.log('worker found: '+ ddpclient.collections.workers[worker_id].name);
-            task_queue.autostart = true;
-            if(wasReconnect){
-                console.log("Resuming the task queue...")
-                task_queue.start((err)=>{console.log('queue is empty or an error occured')});
-            }
-            worker_set({status:'ready', version: worker_version, name: os.hostname()+'('+worker_id.slice(0, 4)+')'});
-            setInterval(function(){ worker_set({'resources.date_time':new Date().toLocaleString()}); }, 3000);
-
-            ddpclient.subscribe(
-              'widgets.worker',                  // name of Meteor Publish function to subscribe to
-              [worker_id, worker_token],         // any parameters used by the Publish function
-              function (error) {
-                console.log('widgets subscribed.');
-                //console.log(ddpclient.collections.widgets);
-            });
-            ddpclient.subscribe(
-              'tasks.worker',                  // name of Meteor Publish function to subscribe to
-              [worker_id, worker_token],       // any parameters used by the Publish function
-              function (error) {
-                console.log('tasks subscribed.');
-                //console.log(ddpclient.collections.tasks);
-            });
-          }
-          else{
-            console.log('ERROR: worker not found.')
-            ddpclient.close();
-          }
+  /*
+   * Subscribe to a Meteor Collection
+   */
+  ddpclient.subscribe(
+    'workers.worker',                  // name of Meteor Publish function to subscribe to
+    [worker_id, worker_token],         // any parameters used by the Publish function
+    function () {             // callback when the subscription is complete
+      console.log('worker subscribed.');
+      //console.log(ddpclient.collections.workers);
+      if(ddpclient.collections.workers && ddpclient.collections.workers[worker_id]){
+        console.log('worker found: '+ ddpclient.collections.workers[worker_id].name);
+        task_queue.autostart = true;
+        if(wasReconnect){
+            console.log("Resuming the task queue...")
+            task_queue.start((err)=>{console.log('queue is empty or an error occured')});
         }
-      );
+        worker_set({status:'ready', version: worker_version, name: os.hostname()+'('+worker_id.slice(0, 4)+')'});
+        setInterval(function(){ worker_set({'resources.date_time':new Date().toLocaleString()}); }, 3000);
+
+        ddpclient.subscribe(
+          'widgets.worker',                  // name of Meteor Publish function to subscribe to
+          [worker_id, worker_token],         // any parameters used by the Publish function
+          function (error) {
+            console.log('widgets subscribed.');
+            //console.log(ddpclient.collections.widgets);
+        });
+        ddpclient.subscribe(
+          'tasks.worker',                  // name of Meteor Publish function to subscribe to
+          [worker_id, worker_token],       // any parameters used by the Publish function
+          function (error) {
+            console.log('tasks subscribed.');
+            //console.log(ddpclient.collections.tasks);
+        });
+      }
+      else{
+        console.log('ERROR: worker not found.')
+        ddpclient.close();
+      }
+    }
+  );
+  if (!wasReconnect) {
       /*
        * Observe collection widgets.
        */
