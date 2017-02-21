@@ -452,7 +452,7 @@ Task.prototype.execute = function(cmd){
                     cb();
                     this.set('status.info', 'exited('+code+')');
                     this.close();
-                }
+                });
             }
             else{
                 cb();
