@@ -403,7 +403,7 @@ Task.prototype.stop = function(msg){
   this.set(m);
 }
 Task.prototype.quit = function(msg){
-  const m = {'status.running': false, 'isOpen':false};
+  const m = {'status.running': false};
   if(!msg || msg.endsWith('ing')){
       msg = 'exited'
   }
@@ -450,7 +450,6 @@ Task.prototype.execute = function(cmd){
       else if(cmd == 'stop'){
         if(this.$ctrl.stop){
           this.$ctrl.stop();
-          this.close('abort');
         }
         else if(this.$ctrl.process){
             $ctrl.process.kill();
@@ -458,6 +457,7 @@ Task.prototype.execute = function(cmd){
         else{
           this.set('status.info', '"$ctrl.stop" is not defined.');
         }
+        this.close('aborted');
       }
       else{
         if(this.$ctrl[cmd]){
