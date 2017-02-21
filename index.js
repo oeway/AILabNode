@@ -321,9 +321,11 @@ function Task(id){
     if(err) console.error(err);
   });
   const worker = {
-    init: null,
-    run: null,
-    stop: null
+    run: ()=>{},
+    stop: ()=>{},
+    open: ()=>{},
+    close: ()=>{},
+    force_close: ()=>{}
   };
   const $ctrl = {
     worker: worker,
@@ -427,7 +429,7 @@ Task.prototype.init = function(){
       console.error(e);
       this.set('status.error', e.toString());
     }
-    this.set({'status.stage':'attached', 'status.info':'','status.error':'', 'status.running': true});
+    this.set({'status.stage':'attached', 'status.info':'','status.error':''});
 }
 Task.prototype.stop = function(msg){
   const m = {'status.running': false};
