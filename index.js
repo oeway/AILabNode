@@ -446,7 +446,17 @@ Task.prototype.execute = function(cmd){
       else if(cmd == 'run' && !this.get('status.running')){
         if(this.$ctrl.run){
           task_queue.push((cb)=>{try {
-            this.$ctrl.run(cb)
+            this.$ctrl.run(cb);
+            if(this.$ctrl.process){
+                this.$ctrl.process.on('close', (code) => {
+                    cb();
+                    this.set('status.info', 'exited('+code+')');
+                    this.close();
+                }
+            }
+            else{
+                cb();
+            }
           } catch (e) {
             console.error(e);
             this.set('status.error', e.toString());
