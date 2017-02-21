@@ -164,15 +164,22 @@ ddpclient.connect(function(error, wasReconnect) {
   const observer_widgets = ddpclient.observe("widgets");
   observer_widgets.added = function(id) {
     console.log("[ADDED] to " + observer_widgets.name + ":  " + id);
+    widgets[id] = new Widget(id);
   };
   observer_widgets.changed = function(id, oldFields, clearedFields, newFields) {
     console.log("[CHANGED] in " + observer_widgets.name + ":  " + id);
     //console.log("[CHANGED] old field values: ", oldFields);
     //console.log("[CHANGED] cleared fields: ", clearedFields);
     //console.log("[CHANGED] new fields: ", newFields);
+    if('code_snippets' in newFields){
+      widgets[id].register();
+    }
   };
   observer_widgets.removed = function(id, oldValue) {
     console.log("[REMOVED] in " + observer_widgets.name + ":  " + id);
+    if(id in widgets){
+      delete widgets[id];
+    }
     //console.log("[REMOVED] previous value: ", oldValue);
   };
   /*
@@ -188,7 +195,11 @@ ddpclient.connect(function(error, wasReconnect) {
       task.close('aborted');
     }
     else if(task.get('cmd') && task.get('cmd') != ''){
+      task.execute('init');
       task.execute(task.get('cmd'));
+    }
+    else{
+      task.execute('init');
     }
   };
   observer_tasks.changed = function(id, oldFields, clearedFields, newFields) {
@@ -203,7 +214,7 @@ ddpclient.connect(function(error, wasReconnect) {
     else{
       task = new Task(id);
     }
-    if('cmd' in newFields){
+    if('cmd' in newFields && newFields['cmd'] != ''){
       task.execute(newFields['cmd']);
     }
   };
@@ -223,16 +234,99 @@ function worker_set(v){
   });
 }
 
-const tasks = {}
+const widgets = {};
+
+function Widget(id){
+  this.id = id;
+  this.register();
+};
+
+Widget.prototype.register = function(){
+  const code_snippets = this.get('code_snippets');
+  const timeout = this.get('config.timeout') || 60000; //ms
+  if('WORKER_js' in code_snippets){
+    try {
+      console.log('widget updated: ' + this.id);
+      for(k in tasks){
+        if(tasks[k].widget.id == this.id)
+          tasks[k].execute('init');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+  else{
+    console.log('WORKER.js not found.');
+    this.script = null;
+  }
+};
+
+Widget.prototype.getCode = function(name){
+  const key = name.replace(/\./g, '_');
+  return ddpclient.collections.widgets[this.id].code_snippets[key].content;
+};
+
+Widget.prototype.get = function(key){
+  try{
+    const keys = key.split('.');
+    let v = ddpclient.collections.widgets[this.id];
+    for(let i in keys){
+      v = v[keys[i]];
+    }
+    return v;
+  }
+  catch(e){
+    return undefined;
+  }
+};
+// Widget.prototype.getFunction = function(task){
+//   return function (cb){
+//     worker_set({'resources.queue_length': task_queue.length});
+//     // overide close()
+//     task.close = (status)=>{
+//       task.quit(status);
+//       cb();
+//     }
+//     // TODO: remove this
+//     task.end = task.close;
+//     try {
+//       task.set({'cmd': ''});
+//       script = ...
+//       if(script){
+//         console.log('executing task: ' + task.id);
+//         task.set({'status.running': true, 'status.stage': 'running', 'status.error':'', 'status.info':''});
+//         script.runInNewContext(task.context, {timeout: task.widget.get('timeout') || 60000});
+//       }
+//       else{
+//         console.log('WORKER.js not found.');
+//         task.set({'status.error': 'WORKER.js not found.', 'status.stage': 'abort'});
+//         task.close();
+//       }
+//     } catch (e) {
+//       console.error(e);
+//       task.set({'status.error': e.toString(), 'status.stage': 'abort'});
+//       task.close();
+//     }
+//   }
+// };
+
+const tasks = {};
 function Task(id){
   this.id = id;
+  this.widget = widgets[this.get('widgetId')];
   this.process = null;
   this.workdir = path.join(workdir, 'widget-' + this.get('widgetId'), 'task-'+this.id);
   if(dropbox) this.dropboxPath = '/widget-' + this.get('widgetId') + '/task-'+ this.id;
   mkdirp(this.workdir, function(err) {
     if(err) console.error(err);
   });
+  const worker = {
+    init: null,
+    run: null,
+    stop: null
+  };
   const $ctrl = {
+    worker: worker,
     task: this,
     child_process: child_process,
   };
@@ -246,6 +340,7 @@ function Task(id){
    dropbox: dropbox,
    $ctrl: $ctrl
   }
+  this.$ctrl = $ctrl;
   this.context = context;
   this.close = this.quit;
   // this.quit_timer = setTimeout(()=>{ console.log('time out'); this.quit();}, 30000);
@@ -312,16 +407,7 @@ Task.prototype.addToSet= function(key, value){
   });
 }
 Task.prototype.getWidgetCode = function(name){
-  const key = name.replace(/\./g, '_');
-  const wid = ddpclient.collections.tasks[this.id]['widgetId'];
-  return ddpclient.collections.widgets[wid].code_snippets[key].content;
-}
-Task.prototype.getWidget = function(key){
-  const wid = ddpclient.collections.tasks[this.id]['widgetId'];
-  if(key){
-    return ddpclient.collections.widgets[wid][key];
-  }
-  return ddpclient.collections.widgets[wid];
+  return this.widget.getCode(name);
 }
 Task.prototype.init = function(process){
   process.on('close', (code) => {
@@ -331,6 +417,11 @@ Task.prototype.init = function(process){
   this.process = process;
   this.set({'status.stage':'running', 'status.info':'','status.error':'', 'status.running': true});
 }
+Task.prototype.stop = function(msg){
+  const m = {'status.running': false};
+  m['status.stage'] = msg || 'stopped';
+  this.set(m);
+}
 Task.prototype.quit = function(msg){
   const m = {'status.running': false, 'isOpen':false};
   m['status.stage'] = msg || 'exited';
@@ -338,57 +429,57 @@ Task.prototype.quit = function(msg){
 }
 Task.prototype.execute = function(cmd){
   cmd = cmd || this.get('cmd');
-  if(cmd == 'run' && !this.get('status.running')){
-    worker_set({'resources.queue_length': task_queue.length});
-
-    task_queue.push((cb)=> {
-      worker_set({'resources.queue_length': task_queue.length});
-      // overide close()
-      this.close = (status)=>{
-        this.quit(status);
-        cb();
-      }
-      // TODO: remove this
-      this.end = this.close;
-      try {
-        this.set({'cmd': ''});
-        const code_snippets = this.getWidget('code_snippets');
-        if('WORKER_js' in code_snippets){
-          console.log('executing task: ' + this.id);
-          this.set({'status.running': true, 'status.stage': 'running', 'status.error':'', 'status.info':''});
-          const script = new vm.Script(code_snippets['WORKER_js'].content, {
-            filename: code_snippets['WORKER_js'].name, // filename for stack traces
-            lineOffset: 1, // line number offset to be used for stack traces
-            columnOffset: 1, // column number offset to be used for stack traces
-            displayErrors: true,
-            timeout: 60000 // ms
-          });
-          script.runInNewContext(this.context, {timeout:60000});
-          // if(!this.process){
-          //   this.close('done');
-          // }
-        }
-        else{
-          console.log('WORKER.js not found.');
-          this.set({'status.error': 'WORKER.js not found.', 'status.stage': 'abort'});
-          this.close();
-        }
+  this.set({'cmd': ''});
+  if(cmd == 'init'){
+    try {
+      this.set({'status.error':'', 'status.info': ''});
+      this.$ctrl.worker = {};
+      const timeout = this.widget.get('timeout') || 60000;
+      const code_snippets = this.widget.get('code_snippets');
+      const script = new vm.Script(code_snippets['WORKER_js'].content, {
+        filename: code_snippets['WORKER_js'].name, // filename for stack traces
+        lineOffset: 0, // line number offset to be used for stack traces
+        columnOffset: 0, // column number offset to be used for stack traces
+        displayErrors: true,
+        timeout: timeout // ms
+      });
+      script.runInNewContext(this.context, {timeout: timeout});
+    } catch (e) {
+      this.set('status.error', e.toString());
+    }
+  }
+  else if(cmd == 'run' && !this.get('status.running')){
+    if(this.$ctrl.worker.run){
+      task_queue.push((cb)=>{try {
+        this.$ctrl.worker.run(cb)
       } catch (e) {
         console.error(e);
-        this.set({'status.error': e.toString(), 'status.stage': 'abort'});
-        this.close();
-      }
-    })
+        this.set('status.error', e.toString());
+        cb();
+      }});
+      worker_set({'resources.queue_length': task_queue.length});
+    }
+    else{
+      this.set('status.error', '"$ctrl.worker.run" is not defined.');
+    }
   }
   else if(cmd == 'stop'){
-    this.set({'cmd': ''});
-    if(this.process) this.process.kill();
-    this.close('aborted');
+    if(this.$ctrl.worker.stop){
+      this.$ctrl.worker.stop();
+      this.close('abort');
+    }
+    else{
+      this.set('status.error', '"$ctrl.worker.stop" is not defined.');
+    }
   }
   else{
-    this.set({'cmd': ''});
+    if(this.$ctrl.worker[cmd]){
+      this.$ctrl.worker[cmd]();
+    }
+    else{
+      this.set('status.error', '"$ctrl.worker.'+cmd+'" is not defined.');
+    }
   }
-
   // clearTimeout(this.quit_timer);
 }
 if(dropbox){
