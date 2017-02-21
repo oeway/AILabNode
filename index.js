@@ -115,89 +115,57 @@ ddpclient.connect(function(error, wasReconnect) {
   //     }
   //   );
   // }, 3000);
-  /*
-   * Subscribe to a Meteor Collection
-   */
-  ddpclient.subscribe(
-    'workers.worker',                  // name of Meteor Publish function to subscribe to
-    [worker_id, worker_token],         // any parameters used by the Publish function
-    function () {             // callback when the subscription is complete
-      console.log('worker subscribed.');
-      //console.log(ddpclient.collections.workers);
-      if(ddpclient.collections.workers && ddpclient.collections.workers[worker_id]){
-        console.log('worker found: '+ ddpclient.collections.workers[worker_id].name);
-        task_queue.autostart = true;
-        if(wasReconnect){
-            console.log("Resuming the task queue...")
-            task_queue.start((err)=>{console.log('queue is empty or an error occured')});
-        }
-        worker_set({status:'ready', version: worker_version, name: os.hostname()+'('+worker_id.slice(0, 4)+')'});
-        setInterval(function(){ worker_set({'resources.date_time':new Date().toLocaleString()}); }, 3000);
-
-        ddpclient.subscribe(
-          'widgets.worker',                  // name of Meteor Publish function to subscribe to
-          [worker_id, worker_token],         // any parameters used by the Publish function
-          function (error) {
-            console.log('widgets subscribed.');
-            //console.log(ddpclient.collections.widgets);
-        });
-        ddpclient.subscribe(
-          'tasks.worker',                  // name of Meteor Publish function to subscribe to
-          [worker_id, worker_token],       // any parameters used by the Publish function
-          function (error) {
-            console.log('tasks subscribed.');
-            //console.log(ddpclient.collections.tasks);
-        });
+      if (!wasReconnect) {
+          /*
+           * Observe collection widgets.
+           */
+          const observer_widgets = ddpclient.observe("widgets");
+          observer_widgets.added = function(id) {
+            console.log("[ADDED] to " + observer_widgets.name + ":  " + id);
+            widgets[id] = new Widget(id);
+          };
+          observer_widgets.changed = function(id, oldFields, clearedFields, newFields) {
+            console.log("[CHANGED] in " + observer_widgets.name + ":  " + id);
+            //console.log("[CHANGED] old field values: ", oldFields);
+            //console.log("[CHANGED] cleared fields: ", clearedFields);
+            //console.log("[CHANGED] new fields: ", newFields);
+            if('code_snippets' in newFields){
+              widgets[id].register();
+            }
+          };
+          observer_widgets.removed = function(id, oldValue) {
+            console.log("[REMOVED] in " + observer_widgets.name + ":  " + id);
+            if(id in widgets){
+              delete widgets[id];
+            }
+            //console.log("[REMOVED] previous value: ", oldValue);
+          };
       }
-      else{
-        console.log('ERROR: worker not found.')
-        ddpclient.close();
-      }
-    }
-  );
-  if (!wasReconnect) {
-      /*
-       * Observe collection widgets.
-       */
-      const observer_widgets = ddpclient.observe("widgets");
-      observer_widgets.added = function(id) {
-        console.log("[ADDED] to " + observer_widgets.name + ":  " + id);
-        widgets[id] = new Widget(id);
-      };
-      observer_widgets.changed = function(id, oldFields, clearedFields, newFields) {
-        console.log("[CHANGED] in " + observer_widgets.name + ":  " + id);
-        //console.log("[CHANGED] old field values: ", oldFields);
-        //console.log("[CHANGED] cleared fields: ", clearedFields);
-        //console.log("[CHANGED] new fields: ", newFields);
-        if('code_snippets' in newFields){
-          widgets[id].register();
-        }
-      };
-      observer_widgets.removed = function(id, oldValue) {
-        console.log("[REMOVED] in " + observer_widgets.name + ":  " + id);
-        if(id in widgets){
-          delete widgets[id];
-        }
-        //console.log("[REMOVED] previous value: ", oldValue);
-      };
-      /*
+    if (!wasReconnect) {
+       /*
        * Observe collection tasks.
        */
       const observer_tasks = ddpclient.observe("tasks");
       observer_tasks.added = function(id) {
         console.log("[ADDED] to " + observer_tasks.name + ":  " + id);
         const task = new Task(id);
-        tasks[id] = task;
-        if(task.get('status.running')){
-          task.set({ 'status.error': 'worker restarted unexpectedly'});
-          task.close('aborted');
-        }
-        else if(task.get('cmd') && task.get('cmd') != ''){
-          task.init();
-          task.execute(task.get('cmd'));
+        if(task.widget){
+            tasks[id] = task;
+            if(task.get('status.running')){
+              task.set({ 'status.error': 'worker restarted unexpectedly'});
+              task.close('aborted');
+            }
+            else if(task.get('cmd') && task.get('cmd') != ''){
+              task.init();
+              task.execute(task.get('cmd'));
+            }
+            else{
+              task.init();
+            }
         }
         else{
-          task.init();
+            task.close('aborted');
+            console.error('widget not found');
         }
       };
       observer_tasks.changed = function(id, oldFields, clearedFields, newFields) {
@@ -223,7 +191,55 @@ ddpclient.connect(function(error, wasReconnect) {
           delete tasks[id];
         }
       };
-  }
+    }
+  /*
+   * Subscribe to a Meteor Collection
+   */
+  ddpclient.subscribe(
+    'workers.worker',                  // name of Meteor Publish function to subscribe to
+    [worker_id, worker_token],         // any parameters used by the Publish function
+    function () {             // callback when the subscription is complete
+      console.log('worker subscribed.');
+      //console.log(ddpclient.collections.workers);
+      if(ddpclient.collections.workers && ddpclient.collections.workers[worker_id]){
+        console.log('worker found: '+ ddpclient.collections.workers[worker_id].name);
+        task_queue.autostart = true;
+        if(wasReconnect){
+            console.log("Resuming the task queue...")
+            task_queue.start((err)=>{console.log('queue is empty or an error occured')});
+        }
+        worker_set({status:'ready', version: worker_version, name: os.hostname()+'('+worker_id.slice(0, 4)+')'});
+        setInterval(function(){ worker_set({'resources.date_time':new Date().toLocaleString()}); }, 3000);
+
+        ddpclient.subscribe(
+          'widgets.worker',                  // name of Meteor Publish function to subscribe to
+          [worker_id, worker_token],         // any parameters used by the Publish function
+          function (error) {
+              if(error)
+                console.error(error);
+              else
+                console.log('widgets subscribed.');
+            //console.log(ddpclient.collections.widgets);
+            ddpclient.subscribe(
+              'tasks.worker',                  // name of Meteor Publish function to subscribe to
+              [worker_id, worker_token],       // any parameters used by the Publish function
+              function (error) {
+                  if(error)
+                    console.error(error);
+                  else
+                    console.log('tasks subscribed.');
+                  //console.log(ddpclient.collections.tasks);
+            });
+              
+        });
+        
+      }
+      else{
+        console.log('ERROR: worker not found.')
+        ddpclient.close();
+      }
+    }
+  );
 
 });
 
@@ -307,7 +323,6 @@ function Task(id){
   const $ctrl = {
     widget: this.widget,
     task: this,
-    child_process: child_process,
     run: ()=>{},
     stop: ()=>{},
     open: ()=>{},
@@ -322,6 +337,7 @@ function Task(id){
    path: path,
    mkdirp: mkdirp,
    dropbox: dropbox,
+   child_process: child_process,
    $ctrl: $ctrl
   }
   this.$ctrl = $ctrl;
@@ -447,6 +463,9 @@ Task.prototype.execute = function(cmd){
                         msg = 'exited('+code+')';
                     }
                     this.close(msg);
+                });
+                this.$ctrl.process.on('error', (err)=>{
+                  console.error(err);
                 });
             }
             else{
