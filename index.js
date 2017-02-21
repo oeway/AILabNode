@@ -1,5 +1,13 @@
 #!/usr/bin/env node
 const worker_version = '0.1';
+const DDPClient = require("ddp");
+const queue = require('queue');
+const child_process = require('child_process');
+const vm = require('vm');
+const path = require('path');
+const mkdirp = require('mkdirp');
+const os = require('os');
+const fs = require('fs');
 const argv = require('yargs')
       .default({id : "",
                 token : "",
@@ -21,7 +29,7 @@ const worker_token=argv.token;
 const host = argv.host;
 const port = argv.port;
 const ssl = argv.ssl;
-const workdir= argv.workdir;
+const workdir= path.resolve(argv.workdir);
 const debug = argv.debug;
 const task_concurrency = argv.concurrency;
 const task_timeout = argv.timeout; //10 days maximum
@@ -37,15 +45,6 @@ if(dropbox_access_token){
     return utils.dropbox_file_upload(dropbox, filePath, uploadPath, chunk_size);
   };
 }
-
-const DDPClient = require("ddp");
-const queue = require('queue');
-const child_process = require('child_process');
-const vm = require('vm');
-const path = require('path');
-const mkdirp = require('mkdirp');
-const os = require('os');
-const fs = require('fs');
 
 const task_queue = queue();
 task_queue.concurrency = task_concurrency;
@@ -269,7 +268,7 @@ Widget.prototype.register = function(){
 Widget.prototype.writeCodeFiles = function(){
     const code_snippets = this.get('code_snippets');
     for(let k in code_snippets){
-        fs.writeFile(path.join(this.workdir, code_snippets[k].name), code_snippets[k].content, function(err) {
+        fs.writeFile(path.join(this.workdir, code_snippets[k].name), code_snippets[k].content, (err)=>{
             if(err) {
                 console.error(err);
             }
