@@ -238,7 +238,7 @@ const widgets = {};
 function Widget(id){
   this.id = id;
   this.workdir = path.join(workdir, 'widget-' + this.id);
-  mkdirp(this.workdir, function(err) {
+  mkdirp(this.workdir, (err)=>{
     if(err) console.error(err);
     this.register();
   });
