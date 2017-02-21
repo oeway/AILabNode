@@ -320,17 +320,14 @@ function Task(id){
   mkdirp(this.workdir, function(err) {
     if(err) console.error(err);
   });
-  const worker = {
+  const $ctrl = {
+    task: this,
+    child_process: child_process,
     run: ()=>{},
     stop: ()=>{},
     open: ()=>{},
     close: ()=>{},
     force_close: ()=>{}
-  };
-  const $ctrl = {
-    worker: worker,
-    task: this,
-    child_process: child_process,
   };
   const context = {
    Buffer: Buffer,
@@ -414,7 +411,6 @@ Task.prototype.getWidgetCode = function(name){
 Task.prototype.init = function(){
     try {
       this.set({'status.error':'', 'status.info': ''});
-      this.$ctrl.worker = {};
       const timeout = this.widget.get('timeout') || 60000;
       const code_snippets = this.widget.get('code_snippets');
       const script = new vm.Script(code_snippets['WORKER_js'].content, {
@@ -448,9 +444,9 @@ Task.prototype.execute = function(cmd){
         this.init();
       }
       else if(cmd == 'run' && !this.get('status.running')){
-        if(this.$ctrl.worker.run){
+        if(this.$ctrl.run){
           task_queue.push((cb)=>{try {
-            this.$ctrl.worker.run(cb)
+            this.$ctrl.run(cb)
           } catch (e) {
             console.error(e);
             this.set('status.error', e.toString());
@@ -459,24 +455,24 @@ Task.prototype.execute = function(cmd){
           worker_set({'resources.queue_length': task_queue.length});
         }
         else{
-          this.set('status.error', '"$ctrl.worker.run" is not defined.');
+          this.set('status.error', '"$ctrl.run" is not defined.');
         }
       }
       else if(cmd == 'stop'){
-        if(this.$ctrl.worker.stop){
-          this.$ctrl.worker.stop();
+        if(this.$ctrl.stop){
+          this.$ctrl.stop();
           this.close('abort');
         }
         else{
-          this.set('status.error', '"$ctrl.worker.stop" is not defined.');
+          this.set('status.error', '"$ctrl.stop" is not defined.');
         }
       }
       else{
-        if(this.$ctrl.worker[cmd]){
-          this.$ctrl.worker[cmd]();
+        if(this.$ctrl[cmd]){
+          this.$ctrl[cmd]();
         }
         else{
-          this.set('status.error', '"$ctrl.worker.'+cmd+'" is not defined.');
+          this.set('status.error', '"$ctrl.'+cmd+'" is not defined.');
         }
       }
   } catch (e) {
