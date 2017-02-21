@@ -397,12 +397,14 @@ Task.prototype.init = function(){
 }
 Task.prototype.stop = function(msg){
   const m = {'status.running': false};
-  m['status.stage'] = msg || 'stopped';
+  if(!msg || msg.endsWith('ing')){
+      msg = 'stopped'
+  }
+  m['status.stage'] = msg;
   this.set(m);
 }
-Task.prototype.close = function(msg, attach){
-  attach = attach || true;
-  const m = {'status.running': false, 'isOpen': attach};
+Task.prototype.close = function(msg){
+  const m = {'status.running': false, 'isOpen': false};
   if(!msg || msg.endsWith('ing')){
       msg = 'exited'
   }
@@ -429,18 +431,18 @@ Task.prototype.execute = function(cmd){
                     else{
                         msg = 'exited('+code+')';
                     }
-                    this.close(msg, false);
+                    this.close(msg);
                 });
             }
             else{
                 cb();
-                this.close(msg, false);
+                this.close();
             }
           } catch (e) {
             console.error(e);
             this.set('status.error', e.toString());
             cb();
-            this.close(msg, true);
+            this.stop();
           }});
           worker_set({'resources.queue_length': task_queue.length});
         }
@@ -458,7 +460,7 @@ Task.prototype.execute = function(cmd){
         else{
           this.set('status.info', '"$ctrl.stop" is not defined.');
         }
-        this.close('aborted', true);
+        this.stop('aborted');
       }
       else{
         if(this.$ctrl[cmd]){
