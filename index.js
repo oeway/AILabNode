@@ -195,11 +195,11 @@ ddpclient.connect(function(error, wasReconnect) {
       task.close('aborted');
     }
     else if(task.get('cmd') && task.get('cmd') != ''){
-      task.execute('init');
+      task.init();
       task.execute(task.get('cmd'));
     }
     else{
-      task.execute('init');
+      task.init();
     }
   };
   observer_tasks.changed = function(id, oldFields, clearedFields, newFields) {
@@ -249,7 +249,7 @@ Widget.prototype.register = function(){
       console.log('widget updated: ' + this.id);
       for(k in tasks){
         if(tasks[k].widget.id == this.id)
-          tasks[k].execute('init');
+          tasks[k].init();
       }
     } catch (e) {
       console.error(e);
@@ -409,28 +409,7 @@ Task.prototype.addToSet= function(key, value){
 Task.prototype.getWidgetCode = function(name){
   return this.widget.getCode(name);
 }
-Task.prototype.init = function(process){
-  process.on('close', (code) => {
-    console.log('exited with code: ' + code);
-    this.close('exited:' + code);
-  });
-  this.process = process;
-  this.set({'status.stage':'running', 'status.info':'','status.error':'', 'status.running': true});
-}
-Task.prototype.stop = function(msg){
-  const m = {'status.running': false};
-  m['status.stage'] = msg || 'stopped';
-  this.set(m);
-}
-Task.prototype.quit = function(msg){
-  const m = {'status.running': false, 'isOpen':false};
-  m['status.stage'] = msg || 'exited';
-  this.set(m);
-}
-Task.prototype.execute = function(cmd){
-  cmd = cmd || this.get('cmd');
-  this.set({'cmd': ''});
-  if(cmd == 'init'){
+Task.prototype.init = function(){
     try {
       this.set({'status.error':'', 'status.info': ''});
       this.$ctrl.worker = {};
@@ -445,40 +424,64 @@ Task.prototype.execute = function(cmd){
       });
       script.runInNewContext(this.context, {timeout: timeout});
     } catch (e) {
+      console.error(e);
       this.set('status.error', e.toString());
     }
-  }
-  else if(cmd == 'run' && !this.get('status.running')){
-    if(this.$ctrl.worker.run){
-      task_queue.push((cb)=>{try {
-        this.$ctrl.worker.run(cb)
-      } catch (e) {
-        console.error(e);
-        this.set('status.error', e.toString());
-        cb();
-      }});
-      worker_set({'resources.queue_length': task_queue.length});
-    }
-    else{
-      this.set('status.error', '"$ctrl.worker.run" is not defined.');
-    }
-  }
-  else if(cmd == 'stop'){
-    if(this.$ctrl.worker.stop){
-      this.$ctrl.worker.stop();
-      this.close('abort');
-    }
-    else{
-      this.set('status.error', '"$ctrl.worker.stop" is not defined.');
-    }
-  }
-  else{
-    if(this.$ctrl.worker[cmd]){
-      this.$ctrl.worker[cmd]();
-    }
-    else{
-      this.set('status.error', '"$ctrl.worker.'+cmd+'" is not defined.');
-    }
+    this.set({'status.stage':'attached', 'status.info':'','status.error':'', 'status.running': true});
+}
+Task.prototype.stop = function(msg){
+  const m = {'status.running': false};
+  m['status.stage'] = msg || 'stopped';
+  this.set(m);
+}
+Task.prototype.quit = function(msg){
+  const m = {'status.running': false, 'isOpen':false};
+  m['status.stage'] = msg || 'exited';
+  this.set(m);
+}
+Task.prototype.execute = function(cmd){
+  try {
+      cmd = cmd || this.get('cmd');
+      if(cmd == 'init'){
+        this.init();
+      }
+      else if(cmd == 'run' && !this.get('status.running')){
+        if(this.$ctrl.worker.run){
+          task_queue.push((cb)=>{try {
+            this.$ctrl.worker.run(cb)
+          } catch (e) {
+            console.error(e);
+            this.set('status.error', e.toString());
+            cb();
+          }});
+          worker_set({'resources.queue_length': task_queue.length});
+        }
+        else{
+          this.set('status.error', '"$ctrl.worker.run" is not defined.');
+        }
+      }
+      else if(cmd == 'stop'){
+        if(this.$ctrl.worker.stop){
+          this.$ctrl.worker.stop();
+          this.close('abort');
+        }
+        else{
+          this.set('status.error', '"$ctrl.worker.stop" is not defined.');
+        }
+      }
+      else{
+        if(this.$ctrl.worker[cmd]){
+          this.$ctrl.worker[cmd]();
+        }
+        else{
+          this.set('status.error', '"$ctrl.worker.'+cmd+'" is not defined.');
+        }
+      }
+  } catch (e) {
+      console.error(e);
+      this.set('status.error', e.toString());
+  } finally {
+      this.set({'cmd': ''});
   }
   // clearTimeout(this.quit_timer);
 }
