@@ -240,8 +240,8 @@ function Widget(id){
   this.workdir = path.join(workdir, 'widget-' + this.id);
   mkdirp(this.workdir, function(err) {
     if(err) console.error(err);
+    this.register();
   });
-  this.register();
 };
 
 Widget.prototype.register = function(){
