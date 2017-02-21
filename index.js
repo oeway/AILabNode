@@ -452,8 +452,11 @@ Task.prototype.execute = function(cmd){
           this.$ctrl.stop();
           this.close('abort');
         }
+        else if(this.$ctrl.process){
+            $ctrl.process.kill();
+        }
         else{
-          this.set('status.error', '"$ctrl.stop" is not defined.');
+          this.set('status.info', '"$ctrl.stop" is not defined.');
         }
       }
       else{
@@ -461,7 +464,7 @@ Task.prototype.execute = function(cmd){
           this.$ctrl[cmd]();
         }
         else{
-          this.set('status.error', '"$ctrl.'+cmd+'" is not defined.');
+          this.set('status.info', '"$ctrl.'+cmd+'" is not defined.');
         }
       }
   } catch (e) {
