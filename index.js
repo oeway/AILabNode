@@ -481,11 +481,13 @@ Task.prototype.execute = function(cmd){
       else if(cmd == 'run' && !this.get('status.running')){
         if(this.$ctrl.run){
           task_queue.push((cb)=>{try {
+            done = (msg)=>{cb();this.stop(msg);};
+
             this.set({'status.running': true, 'status.stage': 'running', 'status.error':'', 'status.info':''});
-            this.$ctrl.run(cb);
+            this.$ctrl.run(done);
             if(this.$ctrl.process){
                 this.$ctrl.process.on('close', (code) => {
-                    cb();
+                    done();
                     if(code == 0){
                         msg = 'done';
                     }
@@ -502,11 +504,11 @@ Task.prototype.execute = function(cmd){
             }
             else{
                 console.log('WARNING: no $ctrl.process returned, please call cb() when finished.');
-                // cb();
+                // done();
                 // this.close();
             }
             if(!this.$ctrl.stop){
-                this.$ctrl.stop = ()=>{ cb(); if(this.$ctrl.process){ this.$ctrl.process.kill();} };
+                this.$ctrl.stop = ()=>{ done(); if(this.$ctrl.process){ this.$ctrl.process.kill();} };
             }
             if(!this.$ctrl.close){
                 this.$ctrl.close = ()=>{this.$ctrl.stop(); this.close();};
@@ -514,8 +516,7 @@ Task.prototype.execute = function(cmd){
           } catch (e) {
             console.error(e);
             this.set('status.error', e.toString());
-            cb();
-            this.stop();
+            done();
           }});
           worker_set({'resources.queue_length': task_queue.length});
         }
