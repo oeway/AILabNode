@@ -200,8 +200,9 @@ ddpclient.connect(function(error, wasReconnect) {
         // console.log("[REMOVED] previous value: ", oldValue);
         if(id in tasks){
           try {
-              if(tasks[id].$ctrl.process) tasks[id].$ctrl.process.kill();
+              tasks[id].$ctrl.close();
           } catch (e) {
+              console.error(e);
           }
           delete tasks[id];
         }
@@ -341,8 +342,7 @@ function Task(id){
     run: ()=>{},
     stop: ()=>{},
     open: ()=>{},
-    close: ()=>{},
-    force_close: ()=>{}
+    close: ()=>{}
   };
   const context = {
    Buffer: Buffer,
@@ -478,6 +478,7 @@ Task.prototype.execute = function(cmd){
                         msg = 'exited('+code+')';
                     }
                     this.close(msg);
+                    delete this.$ctrl.process;
                 });
                 this.$ctrl.process.on('error', (err)=>{
                     console.error(err);
@@ -488,6 +489,12 @@ Task.prototype.execute = function(cmd){
                 console.log('WARNING: no $ctrl.process returned, please call cb() when finished.');
                 // cb();
                 // this.close();
+            }
+            if(!this.$ctrl.stop){
+                this.$ctrl.stop = ()=>{ if(this.$ctrl.process){ this.$ctrl.process.kill(); cb(); this.close();} };
+            }
+            if(!this.$ctrl.close){
+                this.$ctrl.close = ()=>{this.$ctrl.stop()};
             }
           } catch (e) {
             console.error(e);
@@ -504,9 +511,6 @@ Task.prototype.execute = function(cmd){
       else if(cmd == 'stop'){
         if(this.$ctrl.stop){
           this.$ctrl.stop();
-        }
-        else if(this.$ctrl.process){
-            $ctrl.process.kill();
         }
         else{
           this.set('status.info', '"$ctrl.stop" is not defined.');
