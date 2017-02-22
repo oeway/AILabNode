@@ -186,18 +186,29 @@ ddpclient.connect(function(error, wasReconnect) {
       const observer_tasks = ddpclient.observe("tasks");
       observer_tasks.added = function(id) {
         console.log("[ADDED] to " + observer_tasks.name + ":  " + id);
-        const task = new Task(id);
-        tasks[id] = task;
-        if(task.get('status.running')){
-          task.set({ 'status.error': 'worker restarted unexpectedly'});
-          task.close('aborted');
-        }
-        else if(task.get('cmd') && task.get('cmd') != ''){
-          task.init();
-          task.execute(task.get('cmd'));
+        if(id in tasks){
+            const task = tasks[id];
+            if(task.get('status.running')){
+                task.set({ 'status.info': 'worker reconnected.'});
+            }
+            else{
+                task.init();
+            }
         }
         else{
-          task.init();
+            const task = new Task(id);
+            tasks[id] = task;
+            if(task.get('status.running')){
+              task.set({ 'status.error': 'worker restarted unexpectedly'});
+              task.close('aborted');
+            }
+            else if(task.get('cmd') && task.get('cmd') != ''){
+              task.init();
+              task.execute(task.get('cmd'));
+            }
+            else{
+              task.init();
+            }
         }
       };
       observer_tasks.changed = function(id, oldFields, clearedFields, newFields) {
@@ -220,6 +231,10 @@ ddpclient.connect(function(error, wasReconnect) {
         console.log("[REMOVED] in " + observer_tasks.name + ":  " + id);
         // console.log("[REMOVED] previous value: ", oldValue);
         if(id in tasks){
+          try {
+              if(tasks[id].$ctrl.process) tasks[id].$ctrl.process.kill();
+          } catch (e) {
+          }
           delete tasks[id];
         }
       };
