@@ -16,34 +16,35 @@ npm install
 # Getting Start
 You need to login to AILab.AI platform and then goto "Widget Workers", create a new worker, and get the id and token.
 
-As an example, we get a worker `id=iJX99fYEdfasigEAd` and `token=jguogvqlerkygcc`. You need to edit the corresponding values `worker_id` and `worker_token` in the file named `index.js`.
+As an example, we get a worker `id=iJX99fYEdfasigEAe` and `token=jguogvqlerkygcc`, we will use them as arguments for the worker scripts.
 
 Then, to run the actual worker, you can open a terminal window and type the following commands:
 ```bash
 # start worker
-node index.js
+node index.js --id iJX99fYEdfasigEAe --token jguogvqlerkygcc
 ```
 
 And you will see the worker running on the platform, now you are ready to go, try to create a widget and add the worker you just created. In the "Code" tab in a widget editor, you can add one code file named "WORKER.js" with the type "javascript" which will perform the actuall task on the worker node.
 
 ```js
-const cmd = 'python';
-const args = ['-c', 'print("hello world")'];
-const workdir = $ctrl.task.workdir;
+$ctrl.run = function(){
+    const cmd = 'python';
+    const args = ['-c', 'print("hello world")'];
 
-//create a process with the command and args
-const process = $ctrl.child_process.spawn(cmd, args, {cwd: workdir});
-
-//process the output string from the command line
-process.stdout.on('data', (data)=>{
-  const line = data.toString();
-  // parse the console output line here
-  console.log(line);
-  $ctrl.task.set({'status.info': line});
-  $ctrl.task.set({'status.progress': 100});
-});
-
-$ctrl.task.init(process);
+    $ctrl.process = child_process.spawn(cmd, args, {cwd:$ctrl.task.workdir});
+    $ctrl.process.stdout.on('data', (data)=>{
+      console.log(data.toString());
+      // parse the console output here
+      $ctrl.task.set({'status.info': data.toString()});
+    });
+    $ctrl.process.on('error', (e)=>{
+      console.error(e.toString());
+      $ctrl.task.set({'status.error': e.toString()});
+    });
+}
+$ctrl.stop = function(){
+    $ctrl.process.kill();
+}
 ```
 
 # The 3-way binding of the `$ctrl.task` object
