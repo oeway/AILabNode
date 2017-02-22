@@ -348,6 +348,9 @@ function Task(id){
    Buffer: Buffer,
    console: console,
    setTimeout: setTimeout,
+   setInterval: setInterval,
+   require: require,
+    // TODO: remove all these default modules
    fs: fs,
    path: path,
    mkdirp: mkdirp,
