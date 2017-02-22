@@ -268,7 +268,7 @@ Widget.prototype.register = function(){
       console.log('widget updated: ' + this.id);
       this.writeCodeFiles();
       for(k in tasks){
-        if(tasks[k].widget.id == this.id)
+        if(tasks[k].widget.id == this.id && !tasks[k].get('status.running'))
           tasks[k].init();
       }
     } catch (e) {
@@ -469,10 +469,11 @@ Task.prototype.execute = function(cmd){
                     this.set('status.error', err.toString());
                 });
             }
-//            else{
-//                cb();
-//                this.close();
-//            }
+            else{
+                console.log('WARNING: no $ctrl.process returned, please call cb() when finished.');
+                // cb();
+                // this.close();
+            }
           } catch (e) {
             console.error(e);
             this.set('status.error', e.toString());
