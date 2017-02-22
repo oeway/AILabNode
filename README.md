@@ -37,6 +37,10 @@ $ctrl.run = function(){
       // parse the console output here
       $ctrl.task.set({'status.info': data.toString()});
     });
+    $ctrl.process.on('error', (e)=>{
+      console.error(e.toString());
+      $ctrl.task.set({'status.error': e.toString()});
+    });
 }
 $ctrl.stop = function(){
     $ctrl.process.kill();
