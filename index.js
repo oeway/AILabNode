@@ -200,7 +200,7 @@ ddpclient.connect(function(error, wasReconnect) {
         // console.log("[REMOVED] previous value: ", oldValue);
         if(id in tasks){
           try {
-              tasks[id].$ctrl.close();
+            if(tasks[id].$ctrl.close) tasks[id].$ctrl.close();
           } catch (e) {
               console.error(e);
           }
@@ -284,8 +284,13 @@ Widget.prototype.register = function(){
       console.log('widget updated: ' + this.id);
       this.writeCodeFiles();
       for(k in tasks){
-        if(tasks[k].widget.id == this.id && !tasks[k].get('status.running'))
-          tasks[k].init();
+        if(tasks[k].widget.id == this.id){
+          if(tasks[k].get('status.running'))
+              tasks[k].widgetUpdated = true;
+          else
+              tasks[k].init();
+        }
+
       }
     } catch (e) {
       console.error(e);
@@ -339,10 +344,10 @@ function Task(id){
   const $ctrl = {
     widget: this.widget,
     task: this,
-    run: ()=>{},
-    stop: ()=>{},
+    run: null,
+    stop: null,
     open: ()=>{},
-    close: ()=>{}
+    close: null
   };
   const context = {
    Buffer: Buffer,
@@ -360,6 +365,7 @@ function Task(id){
   }
   this.$ctrl = $ctrl;
   this.context = context;
+  this.widgetUpdated = false;
 }
 Task.prototype.get = function(key){
   try{
@@ -438,6 +444,7 @@ Task.prototype.init = function(){
         timeout: timeout // ms
       });
       script.runInNewContext(this.context, {timeout: timeout});
+      console.log('task script updated:', this.id);
     } catch (e) {
       console.error(e);
       this.set('status.error', e.toString());
@@ -451,6 +458,10 @@ Task.prototype.stop = function(msg){
   }
   m['status.stage'] = msg;
   this.set(m);
+  if(this.widgetUpdated){
+    this.widgetUpdated = false;
+    this.init();
+  }
 }
 Task.prototype.close = function(msg){
   const m = {'status.running': false, 'isOpen': false};
@@ -494,10 +505,10 @@ Task.prototype.execute = function(cmd){
                 // this.close();
             }
             if(!this.$ctrl.stop){
-                this.$ctrl.stop = ()=>{ if(this.$ctrl.process){ this.$ctrl.process.kill(); cb(); this.close();} };
+                this.$ctrl.stop = ()=>{ cb(); if(this.$ctrl.process){ this.$ctrl.process.kill();} };
             }
             if(!this.$ctrl.close){
-                this.$ctrl.close = ()=>{this.$ctrl.stop()};
+                this.$ctrl.close = ()=>{this.$ctrl.stop(); this.close();};
             }
           } catch (e) {
             console.error(e);
