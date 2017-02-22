@@ -152,6 +152,7 @@ ddpclient.connect(function(error, wasReconnect) {
             const task = tasks[id];
             if(task.get('status.running')){
                 task.set({ 'status.info': 'worker reconnected.'});
+                task.widget_updated = true;
             }
             else{
                 task.init();
@@ -286,7 +287,7 @@ Widget.prototype.register = function(){
       for(k in tasks){
         if(tasks[k].widget.id == this.id){
           if(tasks[k].get('status.running'))
-              tasks[k].widgetUpdated = true;
+              tasks[k].widget_updated = true;
           else
               tasks[k].init();
         }
@@ -365,7 +366,7 @@ function Task(id){
   }
   this.$ctrl = $ctrl;
   this.context = context;
-  this.widgetUpdated = false;
+  this.widget_updated = false;
 }
 Task.prototype.get = function(key){
   try{
@@ -458,8 +459,8 @@ Task.prototype.stop = function(msg){
   }
   m['status.stage'] = msg;
   this.set(m);
-  if(this.widgetUpdated){
-    this.widgetUpdated = false;
+  if(this.widget_updated){
+    this.widget_updated = false;
     this.init();
   }
 }
