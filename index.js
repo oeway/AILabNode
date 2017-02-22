@@ -465,13 +465,14 @@ Task.prototype.execute = function(cmd){
                     this.close(msg);
                 });
                 this.$ctrl.process.on('error', (err)=>{
-                  console.error(err);
+                    console.error(err);
+                    this.set('status.error', err.toString());
                 });
             }
-            else{
-                cb();
-                this.close();
-            }
+//            else{
+//                cb();
+//                this.close();
+//            }
           } catch (e) {
             console.error(e);
             this.set('status.error', e.toString());
