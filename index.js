@@ -138,6 +138,19 @@ ddpclient.connect(function(error, wasReconnect) {
           observer_widgets.removed = function(id, oldValue) {
             console.log("[REMOVED] in " + observer_widgets.name + ":  " + id);
             if(id in widgets){
+              for(id in tasks){
+                  const task = tasks[id];
+                  if(task.get('widgetId') == id){
+                      try {
+                          if(task.$ctrl.close){
+                              task.$ctrl.close();
+                          }
+                      } catch (err) {
+                          this.set('status.error', err.toString());
+                      }
+                      task.close();
+                  }
+              }
               delete widgets[id];
             }
             //console.log("[REMOVED] previous value: ", oldValue);
