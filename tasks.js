@@ -50,6 +50,7 @@ class Task{
        setTimeout: setTimeout,
        setInterval: setInterval,
        require: require,
+       process: process,
         // TODO: remove all these default modules
        fs: fs,
        path: path,
