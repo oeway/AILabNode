@@ -1,13 +1,11 @@
 #!/usr/bin/env node
 const worker_version = '0.1';
 const DDPClient = require("ddp");
-const queue = require('queue');
-const child_process = require('child_process');
-const vm = require('vm');
+
 const path = require('path');
 const mkdirp = require('mkdirp');
 const os = require('os');
-const fs = require('fs');
+
 const argv = require('yargs')
       .default({id : "",
                 token : "",
@@ -37,6 +35,17 @@ const dropbox_access_token = argv.dropbox_token;
 
 const utils = require('./utils.js');
 
+const Widgets = require('./widgets.js');
+const widgets = Widgets.widgets;
+const Widget = Widgets.Widget;
+
+const Tasks = require('./tasks.js');
+const tasks = Tasks.tasks;
+const Task = Tasks.Task;
+const task_queue = Tasks.task_queue;
+task_queue.concurrency = task_concurrency;
+task_queue.timeout = task_timeout;
+
 let dropbox = undefined;
 if(dropbox_access_token){
   const Dropbox = require('dropbox');
@@ -46,21 +55,14 @@ if(dropbox_access_token){
   };
 }
 
-const task_queue = queue();
-task_queue.concurrency = task_concurrency;
-task_queue.timeout = task_timeout;
+if(dropbox){
+  utils.patchDropboxMethods(Task);
+}
 
-// use the timeout feature to deal with tasks that
-// take too long or forget to execute a callback
-task_queue.on('timeout', function(next, task) {
-  console.log('task timed out:', task.toString().replace(/\n/g, ''));
-  next();
+mkdirp(workdir, (err)=>{
+  if(err) console.error(err);
 });
-// get notified when tasks complete
-task_queue.on('success', function(result, task) {
-  console.log('task finished.');
-  // console.log('task finished processing:', task.toString().replace(/\n/g, ''));
-});
+
 
 const ddpclient = new DDPClient({
   // All properties optional, defaults shown
@@ -122,7 +124,7 @@ ddpclient.connect(function(error, wasReconnect) {
           const observer_widgets = ddpclient.observe("widgets");
           observer_widgets.added = function(id) {
             console.log("[ADDED] to " + observer_widgets.name + ":  " + id);
-            widgets[id] = new Widget(id);
+            widgets[id] = new Widget(id, ddpclient, tasks, workdir);
           };
           observer_widgets.changed = function(id, oldFields, clearedFields, newFields) {
             console.log("[CHANGED] in " + observer_widgets.name + ":  " + id);
@@ -159,7 +161,8 @@ ddpclient.connect(function(error, wasReconnect) {
             }
         }
         else{
-            const task = new Task(id);
+            const t = ddpclient.collections.tasks[id];
+            const task = new Task(id, ddpclient, widgets[t['widgetId']], workdir, worker_id, worker_token, dropbox);
             if(task.widget){
                 tasks[id] = task;
                 if(task.get('status.running')){
@@ -190,7 +193,8 @@ ddpclient.connect(function(error, wasReconnect) {
           task = tasks[id];
         }
         else{
-          task = new Task(id);
+          const t = ddpclient.collections.tasks[id];
+          task = new Task(id, ddpclient, widgets[t['widgetId']], workdir, worker_id, worker_token, dropbox);
         }
         if('cmd' in newFields && newFields['cmd'] != ''){
           task.execute(newFields['cmd']);
@@ -266,368 +270,6 @@ function worker_set(v){
   });
 }
 
-const widgets = {};
-
-function Widget(id){
-  this.id = id;
-  this.workdir = path.join(workdir, 'widget-' + this.id);
-  mkdirp(this.workdir, (err)=>{
-    if(err) console.error(err);
-    this.register();
-  });
-};
-
-Widget.prototype.register = function(){
-  const code_snippets = this.get('code_snippets');
-  const timeout = this.get('config.timeout') || 60000; //ms
-  if('WORKER_js' in code_snippets){
-    try {
-      console.log('widget updated: ' + this.id);
-      this.writeCodeFiles();
-      for(k in tasks){
-        if(tasks[k].widget.id == this.id){
-          if(tasks[k].get('status.running'))
-              tasks[k].widget_updated = true;
-          else
-              tasks[k].init();
-        }
-
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }
-  else{
-    console.log('WORKER.js not found.');
-    this.script = null;
-  }
-};
-
-Widget.prototype.writeCodeFiles = function(){
-    const code_snippets = this.get('code_snippets');
-    for(let k in code_snippets){
-        fs.writeFile(path.join(this.workdir, code_snippets[k].name), code_snippets[k].content, (err)=>{
-            if(err) {
-                console.error(err);
-            }
-        });
-    }
-}
-Widget.prototype.getCode = function(name){
-  const key = name.replace(/\./g, '_');
-  return ddpclient.collections.widgets[this.id].code_snippets[key].content;
-};
-
-Widget.prototype.get = function(key){
-  try{
-    const keys = key.split('.');
-    let v = ddpclient.collections.widgets[this.id];
-    for(let i in keys){
-      v = v[keys[i]];
-    }
-    return v;
-  }
-  catch(e){
-    return undefined;
-  }
-};
-
-const tasks = {};
-function Task(id){
-  this.id = id;
-  this.widget = widgets[this.get('widgetId')];
-  this.process = null;
-  this.workdir = path.join(workdir, 'widget-' + this.get('widgetId'), 'task-'+this.id);
-  if(dropbox) this.dropboxPath = '/widget-' + this.get('widgetId') + '/task-'+ this.id;
-  mkdirp(this.workdir, function(err) {
-    if(err) console.error(err);
-  });
-  const $ctrl = {
-    widget: this.widget,
-    task: this,
-    run: null,
-    stop: null,
-    open: ()=>{},
-    close: null
-  };
-  const context = {
-   Buffer: Buffer,
-   console: console,
-   setTimeout: setTimeout,
-   setInterval: setInterval,
-   require: require,
-    // TODO: remove all these default modules
-   fs: fs,
-   path: path,
-   mkdirp: mkdirp,
-   dropbox: dropbox,
-   child_process: child_process,
-   $ctrl: $ctrl
-  }
-  this.$ctrl = $ctrl;
-  this.context = context;
-  this.widget_updated = false;
-}
-Task.prototype.get = function(key){
-  try{
-    const keys = key.split('.');
-    let v = ddpclient.collections.tasks[this.id];
-    for(let i in keys){
-      v = v[keys[i]];
-    }
-    return v;
-  }
-  catch(e){
-    return undefined;
-  }
-}
-Task.prototype.set = function(key, value){
-  let doc = {};
-  if(typeof key == 'object'){
-    doc = key;
-  }
-  else{
-    doc[key] = value
-  }
-  ddpclient.call("tasks.update.worker", [this.id, worker_id, worker_token, {'$set': doc}], function (err, result) {
-    if(err) console.error('task set error:', err);
-  });
-}
-Task.prototype.push= function(key, value){
-  let doc = {};
-  if(typeof key == 'object'){
-    doc = key;
-  }
-  else{
-    doc[key] = value
-  }
-  ddpclient.call("tasks.update.worker", [this.id, worker_id, worker_token, {'$push': doc}], function (err, result) {
-    if(err) console.error('task push error:', err);
-  });
-}
-Task.prototype.pull= function(key, value){
-  let doc = {};
-  if(typeof key == 'object'){
-    doc = key;
-  }
-  else{
-    doc[key] = value
-  }
-  ddpclient.call("tasks.update.worker", [this.id, worker_id, worker_token, {'$pull': doc}], function (err, result) {
-    if(err) console.error('task pull error:', err);
-  });
-}
-Task.prototype.addToSet= function(key, value){
-  let doc = {};
-  if(typeof key == 'object'){
-    doc = key;
-  }
-  else{
-    doc[key] = value
-  }
-  ddpclient.call("tasks.update.worker", [this.id, worker_id, worker_token, {'$addToSet': doc}], function (err, result) {
-    if(err) console.error('task addToSet error:', err);
-  });
-}
-Task.prototype.getWidgetCode = function(name){
-  return this.widget.getCode(name);
-}
-Task.prototype.init = function(){
-    try {
-      this.set({'status.error':'', 'status.info': ''});
-      const timeout = this.widget.get('timeout') || 60000;
-      const code_snippets = this.widget.get('code_snippets');
-      const script = new vm.Script(code_snippets['WORKER_js'].content, {
-        filename: code_snippets['WORKER_js'].name, // filename for stack traces
-        lineOffset: 0, // line number offset to be used for stack traces
-        columnOffset: 0, // column number offset to be used for stack traces
-        displayErrors: true,
-        timeout: timeout // ms
-      });
-      script.runInNewContext(this.context, {timeout: timeout});
-      console.log('task script updated:', this.id);
-    } catch (e) {
-      console.error(e);
-      this.set('status.error', e.toString());
-    }
-    this.set({'status.stage':'attached', 'status.info':'','status.error':''});
-}
-Task.prototype.stop = function(msg){
-  const m = {'status.running': false};
-  if(!msg || msg.endsWith('ing')){
-      msg = 'stopped'
-  }
-  m['status.stage'] = msg;
-  this.set(m);
-  if(this.widget_updated){
-    this.widget_updated = false;
-    this.init();
-  }
-}
-Task.prototype.close = function(msg){
-  const m = {'status.running': false, 'isOpen': false};
-  if(!msg || msg.endsWith('ing')){
-      msg = 'exited'
-  }
-  m['status.stage'] =  msg;
-  this.set(m);
-}
-Task.prototype.execute = function(cmd){
-  try {
-      cmd = cmd || this.get('cmd');
-      if(cmd == 'init'){
-        this.init();
-      }
-      else if(cmd == 'run' && !this.get('status.running')){
-        if(this.$ctrl.run){
-          task_queue.push((cb)=>{try {
-            done = (msg)=>{cb();this.stop(msg);};
-
-            this.set({'status.running': true, 'status.stage': 'running', 'status.error':'', 'status.info':''});
-            this.$ctrl.run(done);
-            if(this.$ctrl.process){
-                this.$ctrl.process.on('close', (code) => {
-                    done();
-                    if(code == 0){
-                        msg = 'done';
-                    }
-                    else{
-                        msg = 'exited('+code+')';
-                    }
-                    this.close(msg);
-                    delete this.$ctrl.process;
-                });
-                this.$ctrl.process.on('error', (err)=>{
-                    console.error(err);
-                    this.set('status.error', err.toString());
-                });
-            }
-            else{
-                console.log('WARNING: no $ctrl.process returned, please call cb() when finished.');
-                // done();
-                // this.close();
-            }
-            if(!this.$ctrl.stop){
-                this.$ctrl.stop = ()=>{ done(); if(this.$ctrl.process){ this.$ctrl.process.kill();} };
-            }
-            if(!this.$ctrl.close){
-                this.$ctrl.close = ()=>{this.$ctrl.stop(); this.close();};
-            }
-          } catch (e) {
-            console.error(e);
-            this.set('status.error', e.toString());
-            done();
-          }});
-          worker_set({'resources.queue_length': task_queue.length});
-        }
-        else{
-          this.set('status.error', '"$ctrl.run" is not defined.');
-        }
-      }
-      else if(cmd == 'stop'){
-        if(this.$ctrl.stop){
-          this.$ctrl.stop();
-        }
-        else{
-          this.set('status.info', '"$ctrl.stop" is not defined.');
-        }
-        this.stop('aborted');
-      }
-      else{
-        if(this.$ctrl[cmd]){
-          this.$ctrl[cmd]();
-        }
-        else{
-          this.set('status.info', '"$ctrl.'+cmd+'" is not defined.');
-        }
-      }
-  } catch (e) {
-      console.error(e);
-      this.set('status.error', e.toString());
-  } finally {
-      this.set({'cmd': ''});
-  }
-}
-if(dropbox){
-  Task.prototype.downloadUrl = function(url, filename){
-    // replace for dropbox
-    url = url.split("?dl=0").join("?dl=1");
-    return new Promise((resolve, reject)=>{
-      utils.download(url, path.join(this.workdir, filename), resolve);
-    });
-  };
-  Task.prototype.saveDownloadUrl = function(url, filename){
-    return new Promise((resolve, reject)=>{
-      // replace for dropbox
-      url = url.split("?dl=0").join("?dl=1");
-      dropbox.filesSaveUrl({path: this.dropboxPath + '/' + filename, url:url}).then((result)=>{
-        console.log(result);
-      },(err)=>{
-        reject(err);
-      });
-      this.downloadUrl(url, filename).then(()=>{
-        resolve(filename);
-      }).catch(function(error) {
-        console.log(error);
-      });
-    });
-  };
-  Task.prototype.getSharedLink = function(short_url) {
-    return new Promise((resolve, reject)=>{
-      dropbox.sharingCreateSharedLink({path:this.dropboxPath, short_url:short_url}).then((link)=>{
-        console.log(link.url);
-        resolve(link);
-      },(err)=>{
-        reject(err);
-      });
-    });
-  };
-  Task.prototype.uploadFile= function(file_name, chunk_size, create_shared_link){
-    const file_path = path.join(this.workdir, file_name);
-    const upload_file_path = this.dropboxPath + '/' + file_name;
-    create_shared_link = create_shared_link || true;
-    return new Promise((resolve, reject)=>{
-      dropbox.filesGetMetadata({path: this.dropboxPath, include_media_info: false, include_deleted: false})
-      .then(function(response) {
-          dropbox.uploadFile(file_path, upload_file_path, chunk_size).then(
-            (file_meta_data)=>{
-              console.log('file uploaded:', file_meta_data);
-              if(create_shared_link){
-                dropbox.sharingCreateSharedLink({path:file_meta_data.path_lower, short_url:true}).then((link)=>{
-                  console.log(link.url);
-                  resolve(link);
-                },(err)=>{
-                  reject(err);
-                });
-              }
-              else{
-                resolve(file_meta_data);
-              }
-            },
-            (error)=>{
-              reject(error);
-            }
-          );
-      })
-      .catch(function(error) {
-          dropbox.filesCreateFolder({path: upload_task_dir})
-          .then((response)=>{
-             dropbox.uploadFile(file_path, upload_file_path, chunk_size).then(
-               (file_meta_data)=>{
-                 resolve(file_meta_data);
-               },
-               (error)=>{
-                 reject(error);
-               }
-             );
-          })
-          .catch(function(error) {
-            console.log(error);
-          });
-      });
-    });
-  };
-}
 // /*
 //  * If you need to do something specific on close or errors.
 //  * You can also disable autoReconnect and
