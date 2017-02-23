@@ -21,7 +21,7 @@
     "ddp": "^0.12.1",
     "dropbox": "^2.5.1",
     "mkdirp": "^0.5.1",
-    "python-bridge": "^0.1.2",
+    "python-bridge": "git+https://github.com/oeway/node-python-bridge.git",
     "queue": "^4.2.1",
     "request": "^2.79.0",
     "yargs": "^6.6.0"
