@@ -50,6 +50,7 @@ class Task{
        setTimeout: setTimeout,
        setInterval: setInterval,
        require: require,
+       process: process,
         // TODO: remove all these default modules
        fs: fs,
        path: path,
@@ -62,7 +63,7 @@ class Task{
 
       this.widget_updated = false;
     }
-    worker_set(v){
+    setWorker(v){
       this.ddpclient.call('workers.update', [this.worker_id, this.worker_token, {'$set': v}], function (err, result) {
         if(err) console.error('worker update error:', err);
       });
@@ -148,6 +149,9 @@ class Task{
               if(this.$ctrl.close){
                   this.$ctrl.close();
               }
+              if(this.$ctrl.queue_callback){
+                  this.$ctrl.queue_callback();
+              }
           } catch (err) {
               this.set('status.error', err.toString());
           }
@@ -205,19 +209,15 @@ class Task{
           else if(cmd == 'run' && !this.get('status.running')){
             if(this.$ctrl.run){
               task_queue.push((cb)=>{
-                const done = (msg)=>{cb();this.stop(msg);};
+                this.$ctrl.queue_callback = cb;
+                const done = (msg)=>{cb(); this.$ctrl.queue_callback=null; this.stop(msg); this.close(msg);};
                 try {
                 this.set({'status.running': true, 'status.stage': 'running', 'status.error':'', 'status.info':''});
                 this.$ctrl.run(done);
                 if(this.$ctrl.process){
                     this.$ctrl.process.on('close', (code) => {
                         done();
-                        if(code == 0){
-                            msg = 'done';
-                        }
-                        else{
-                            msg = 'exited('+code+')';
-                        }
+                        const msg = code==0 ? 'done': 'exited('+code+')';
                         this.close(msg);
                         delete this.$ctrl.process;
                     });
@@ -227,7 +227,7 @@ class Task{
                     });
                 }
                 else{
-                    console.log('WARNING: no $ctrl.process returned, please call cb() when finished.');
+                    console.log('WARNING: no $ctrl.process returned, please call done() when finished.');
                     // done();
                     // this.close();
                 }
@@ -239,7 +239,7 @@ class Task{
                 this.set('status.error', e.toString());
                 done();
               }});
-              this.worker_set({'resources.queue_length': task_queue.length});
+              this.setWorker({'resources.queue_length': task_queue.length});
             }
             else{
               this.set('status.error', '"$ctrl.run" is not defined.');
@@ -253,6 +253,14 @@ class Task{
               this.set('status.info', '"$ctrl.stop" is not defined.');
             }
             this.stop('aborted');
+          }
+          else if(cmd == 'close'){
+            if(this.$ctrl.close){
+              this.$ctrl.close();
+            }
+            if(this.$ctrl.queue_callback){
+              this.$ctrl.queue_callback();
+            }
           }
           else{
             if(this.$ctrl[cmd]){
