@@ -217,12 +217,7 @@ class Task{
                 if(this.$ctrl.process){
                     this.$ctrl.process.on('close', (code) => {
                         done();
-                        if(code == 0){
-                            msg = 'done';
-                        }
-                        else{
-                            msg = 'exited('+code+')';
-                        }
+                        const msg = code==0 ? 'done': 'exited('+code+')';
                         this.close(msg);
                         delete this.$ctrl.process;
                     });
