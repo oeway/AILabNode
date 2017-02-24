@@ -1,6 +1,6 @@
 FROM gw000/keras:latest
 
-MAINTAINER Wei OUYANG <oeway007@gmail.com>
+MAINTAINER Wei OUYANG <oeway007<AT>gmail.com>
 
 RUN apt-get update -qq \
         && apt-get install --no-install-recommends -y \
