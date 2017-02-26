@@ -233,7 +233,7 @@ ddpclient.connect(function(error, wasReconnect) {
     'worker.widgets',                  // name of Meteor Publish function to subscribe to
     [worker_id, worker_token],         // any parameters used by the Publish function
     function () {             // callback when the subscription is complete
-      console.log('worker subscribed.');
+      console.log('worker.widgets subscribed.');
       //console.log(ddpclient.collections.workers);
       if(ddpclient.collections.workers && ddpclient.collections.workers[worker_id]){
         console.log('worker found: '+ ddpclient.collections.workers[worker_id].name);
