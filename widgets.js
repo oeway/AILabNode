@@ -18,7 +18,7 @@ class Widget{
     register(){
       const code_snippets = this.get('code_snippets');
       const timeout = this.get('config.timeout') || 60000; //ms
-      if('WORKER_js' in code_snippets){
+      if(code_snippets && 'WORKER_js' in code_snippets){
         try {
           console.log('widget updated: ' + this.id);
           this.writeCodeFiles();
