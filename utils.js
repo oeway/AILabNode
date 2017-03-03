@@ -1,7 +1,7 @@
 const fs = require('fs');
 const request = require('request');
 
-exports.patchDropboxMethods = function(Task){
+exports.patchDropboxMethods = function(Task, dropbox){
     Task.prototype.downloadUrl = function(url, filename){
       // replace for dropbox
       url = url.split("?dl=0").join("?dl=1");
