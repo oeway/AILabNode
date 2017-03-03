@@ -56,7 +56,7 @@ if(dropbox_access_token){
 }
 
 if(dropbox){
-  utils.patchDropboxMethods(Task);
+  utils.patchDropboxMethods(Task, dropbox);
 }
 
 mkdirp(workdir, (err)=>{
