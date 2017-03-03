@@ -1,5 +1,6 @@
 const fs = require('fs');
 const request = require('request');
+const path = require('path');
 
 exports.patchDropboxMethods = function(Task, dropbox){
     Task.prototype.downloadUrl = function(url, filename){
