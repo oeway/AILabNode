@@ -6,7 +6,7 @@ exports.patchDropboxMethods = function(Task, dropbox){
       // replace for dropbox
       url = url.split("?dl=0").join("?dl=1");
       return new Promise((resolve, reject)=>{
-        utils.download(url, path.join(this.workdir, filename), resolve);
+        download(url, path.join(this.workdir, filename), resolve);
       });
     };
     Task.prototype.saveDownloadUrl = function(url, filename){
