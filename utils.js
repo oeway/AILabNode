@@ -82,7 +82,7 @@ exports.patchDropboxMethods = function(Task, dropbox){
     };
 }
 
-exports.download = function(url, dest, cb) {
+const download = function(url, dest, cb) {
     var file = fs.createWriteStream(dest);
     var sendReq = request.get(url);
 
@@ -110,8 +110,7 @@ exports.download = function(url, dest, cb) {
         return cb(err.message);
     });
 };
-
-exports.dropbox_file_upload = function(dropbox, filePath, uploadPath, chunk_size) {
+const dropbox_file_upload = function(dropbox, filePath, uploadPath, chunk_size) {
   chunk_size = chunk_size || 10 * 1024 * 1024; // 10MB
   const buffer = new Buffer(chunk_size);
   return new Promise(function(resolve, reject) {
@@ -204,3 +203,7 @@ exports.dropbox_file_upload = function(dropbox, filePath, uploadPath, chunk_size
     });
   });
 };
+
+exports.download = download;
+exports.dropbox_file_upload = dropbox_file_upload;
+
