@@ -36,8 +36,11 @@ exports.patchDropboxMethods = function(Task, dropbox){
         });
       });
     };
-    Task.prototype.uploadFile= function(file_name, chunk_size, create_shared_link){
-      const file_path = path.join(this.workdir, file_name);
+    Task.prototype.uploadFile= function(file_path, chunk_size, create_shared_link){
+      if(!path.isAbsolute(file_path)){
+          file_path = path.join(this.workdir, file_name);
+      }
+      const file_name = path.basename(file_path);
       const upload_file_path = this.dropboxPath + '/' + file_name;
       create_shared_link = create_shared_link || true;
       return new Promise((resolve, reject)=>{
