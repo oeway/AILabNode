@@ -193,7 +193,10 @@ class Task{
       }
     }
     close(msg){
-      const m = {'status.running': false, 'isOpen': false};
+      if(this.get('status.running')){
+        this.stop('abort');
+      }
+      const m = {'isOpen': false};
       if(!msg || msg.endsWith('ing')){
           msg = 'exited'
       }
