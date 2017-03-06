@@ -36,21 +36,22 @@ exports.patchDropboxMethods = function(Task, dropbox){
         });
       });
     };
-    Task.prototype.uploadFile= function(file_path, chunk_size, create_shared_link){
+    Task.prototype.uploadFile= function(file_path, chunk_size, create_shared_link, short_url){
       if(!path.isAbsolute(file_path)){
           file_path = path.join(this.workdir, file_name);
       }
       const file_name = path.basename(file_path);
       const upload_file_path = this.dropboxPath + '/' + file_name;
       create_shared_link = create_shared_link || true;
+      short_url = short_url || false;
       return new Promise((resolve, reject)=>{
         dropbox.filesGetMetadata({path: this.dropboxPath, include_media_info: false, include_deleted: false})
-        .then(function(response) {
+        .then((response)=>{
             dropbox.uploadFile(file_path, upload_file_path, chunk_size).then(
               (file_meta_data)=>{
                 console.log('file uploaded:', file_meta_data);
                 if(create_shared_link){
-                  dropbox.sharingCreateSharedLink({path:file_meta_data.path_lower, short_url:true}).then((link)=>{
+                  dropbox.sharingCreateSharedLink({path:file_meta_data.path_lower, short_url:short_url}).then((link)=>{
                     console.log(link.url);
                     resolve(link);
                   },(err)=>{
@@ -66,8 +67,8 @@ exports.patchDropboxMethods = function(Task, dropbox){
               }
             );
         })
-        .catch(function(error) {
-            dropbox.filesCreateFolder({path: upload_task_dir})
+        .catch((error)=>{
+            dropbox.filesCreateFolder({path: this.dropboxPath})
             .then((response)=>{
                dropbox.uploadFile(file_path, upload_file_path, chunk_size).then(
                  (file_meta_data)=>{
@@ -78,8 +79,9 @@ exports.patchDropboxMethods = function(Task, dropbox){
                  }
                );
             })
-            .catch(function(error) {
-              console.log(error);
+            .catch((error)=>{
+              	reject(error);
+		console.log(error);
             });
         });
       });
