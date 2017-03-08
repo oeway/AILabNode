@@ -4,7 +4,7 @@ const fs = require('fs');
 const child_process = require('child_process');
 const vm = require('vm');
 const queue = require('queue');
-
+const utils = require('./utils.js');
 const Widget = require('./widgets.js').Widget;
 const tasks = {};
 
