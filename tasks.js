@@ -22,14 +22,14 @@ task_queue.on('success', function(result, task) {
 });
 
 class Task{
-  constructor(id, ddpclient, widget, workdir, worker_id, worker_token, dropbox){
+  constructor(id, ddpclient, widget, worker_dir, worker_id, worker_token, dropbox){
       this.id = id;
       this.widget = widget;
       this.ddpclient = ddpclient;
       this.process = null;
       this.worker_id = worker_id;
       this.worker_token = worker_token;
-      this.workdir = path.join(workdir, 'widget-' + this.get('widgetId'), 'task-'+this.id);
+      this.workdir = path.join(worker_dir, 'widget-' + this.get('widgetId'), 'task-'+this.id);
       if(dropbox) this.dropboxPath = '/widget-' + this.get('widgetId') + '/task-'+ this.id;
       mkdirp(this.workdir, function(err) {
         if(err) console.error(err);
@@ -45,6 +45,7 @@ class Task{
       };
       this.$ctrl = Object.assign({}, this.default_ctrl);
       this.default_context = {
+       workdir: path.resolve(worker_dir, '../'),
        Buffer: Buffer,
        console: console,
        setTimeout: setTimeout,
@@ -136,13 +137,7 @@ class Task{
       }
       // replace for dropbox
       url = url.split("?dl=0").join("?dl=1");
-      return new Promise((resolve, reject)=>{
-        const ret = utils.download(url, file_path, allow_cache, resolve);
-        if(ret){
-            console.log('using cache:', ret);
-            resolve(ret);
-        };
-      });
+      return utils.download(url, file_path, allow_cache);
     }
     getWidgetCode (name){
       return this.widget.getCode(name);

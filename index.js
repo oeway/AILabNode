@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const worker_version = '0.1';
 const DDPClient = require("ddp");
-
+const fs = require('fs');
 const path = require('path');
 const mkdirp = require('mkdirp');
 const os = require('os');
@@ -12,7 +12,7 @@ const argv = require('yargs')
                 host: 'ai.pasteur.fr',
                 port: 443,
                 ssl: true,
-                workdir: './dai-workdir',
+                workdir: './',
                 dropbox_token: null,
                 debug: false,
                 concurrency: 10,
@@ -27,7 +27,7 @@ const worker_token=argv.token;
 const host = argv.host;
 const port = argv.port;
 const ssl = argv.ssl;
-const workdir= path.resolve(argv.workdir);
+const worker_dir= path.resolve(path.join(argv.workdir, '__worker__'));
 const debug = argv.debug;
 const task_concurrency = argv.concurrency;
 const task_timeout = argv.timeout; //10 days maximum
@@ -59,11 +59,9 @@ if(dropbox){
   utils.patchDropboxMethods(Task, dropbox);
 }
 
-mkdirp(workdir, (err)=>{
-  if(err) console.error(err);
-});
-
-utils.load_cache(workdir);
+if(!fs.existsSync(worker_dir))
+mkdirp.sync(worker_dir);
+utils.load_cache(worker_dir);
 
 const ddpclient = new DDPClient({
   // All properties optional, defaults shown
@@ -125,7 +123,7 @@ ddpclient.connect(function(error, wasReconnect) {
           const observer_widgets = ddpclient.observe("widgets");
           observer_widgets.added = function(id) {
             console.log("[ADDED] to " + observer_widgets.name + ":  " + id);
-            widgets[id] = new Widget(id, ddpclient, tasks, workdir);
+            widgets[id] = new Widget(id, ddpclient, tasks, worker_dir);
           };
           observer_widgets.changed = function(id, oldFields, clearedFields, newFields) {
             console.log("[CHANGED] in " + observer_widgets.name + ":  " + id);
@@ -176,7 +174,7 @@ ddpclient.connect(function(error, wasReconnect) {
         }
         else{
             const t = ddpclient.collections.tasks[id];
-            const task = new Task(id, ddpclient, widgets[t['widgetId']], workdir, worker_id, worker_token, dropbox);
+            const task = new Task(id, ddpclient, widgets[t['widgetId']], worker_dir, worker_id, worker_token, dropbox);
             if(task.widget){
                 tasks[id] = task;
                 if(task.get('status.running')){
@@ -208,7 +206,7 @@ ddpclient.connect(function(error, wasReconnect) {
         }
         else{
           const t = ddpclient.collections.tasks[id];
-          task = new Task(id, ddpclient, widgets[t['widgetId']], workdir, worker_id, worker_token, dropbox);
+          task = new Task(id, ddpclient, widgets[t['widgetId']], worker_dir, worker_id, worker_token, dropbox);
         }
         if('cmd' in newFields && newFields['cmd'] != ''){
           task.execute(newFields['cmd']);
@@ -292,7 +290,7 @@ ddpclient.on('socket-error', function(error) {
 
 process.on('SIGINT', ()=>{
     console.log("interrupting...");
-    utils.save_cache(workdir);
+    utils.save_cache(worker_dir);
     worker_set({status:'exit'});
     process.exit();
 });

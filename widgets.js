@@ -4,11 +4,11 @@ const fs = require('fs');
 
 const widgets = {};
 class Widget{
-    constructor(id, ddpclient, tasks, workdir){
+    constructor(id, ddpclient, tasks, worker_dir){
       this.id = id;
       this.ddpclient = ddpclient;
       this.tasks = tasks;
-      this.workdir = path.join(workdir, 'widget-' + this.id);
+      this.workdir = path.join(worker_dir, 'widget-' + this.id);
       mkdirp(this.workdir, (err)=>{
         if(err) console.error(err);
         this.register();

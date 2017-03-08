@@ -40,15 +40,14 @@ exports.patchDropboxMethods = function(Task, dropbox){
           file_path = path.join(this.workdir, file_path);
       }
       const file_name = path.basename(file_path);
+      url = url.split("?dl=0").join("?dl=1");
       return new Promise((resolve, reject)=>{
         // replace for dropbox
-        url = url.split("?dl=0").join("?dl=1");
         Promise.all([
           dropbox.filesSaveUrl({path: this.dropboxPath + '/' + file_name, url:url}),
           this.downloadUrl(url, file_path, allow_cache)
         ]).then((result)=>{
-          console.log(result);
-          resolve(file_path);
+          resolve(result[1]);
         },(err)=>{
           reject(err);
         });
@@ -77,7 +76,7 @@ exports.patchDropboxMethods = function(Task, dropbox){
         .then((response)=>{
             dropbox.uploadFile(file_path, upload_file_path, chunk_size).then(
               (file_meta_data)=>{
-                console.log('file uploaded:', file_meta_data);
+                // console.log('file uploaded:', file_meta_data);
                 if(create_shared_link){
                   dropbox.sharingCreateSharedLink({path:file_meta_data.path_lower, short_url:short_url}).then((link)=>{
                     console.log(link.url);
@@ -116,44 +115,48 @@ exports.patchDropboxMethods = function(Task, dropbox){
     };
 }
 
-const download = function(url, dest, allow_cache, cb) {
+const download = function(url, dest, allow_cache) {
     allow_cache = allow_cache || true;
     // timout = timout || 36000000;
-    if(allow_cache){
-      const k = cache.get(url);
-      if(k && fs.existsSync(k)) return k;
-    }
-    cache.del(url);
-    console.log('downloading ', url);
-    var sendReq = request.get(url);
-    var file = fs.createWriteStream(dest);
-
-
-    // verify response code
-    sendReq.on('response', function(response) {
-        if (response.statusCode !== 200) {
-            return cb('Response status was ' + response.statusCode);
+    return new Promise((resolve, reject)=>{
+        if(allow_cache){
+          const k = cache.get(url);
+          if(k && fs.existsSync(k)){
+              console.log('use cached file: ', k);
+              return resolve(k);
+          };
         }
-    });
+        cache.del(url);
+        console.log('downloading ', url);
+        var sendReq = request.get(url);
+        var file = fs.createWriteStream(dest);
 
-    // check for request errors
-    sendReq.on('error', function (err) {
-        fs.unlink(dest);
-        return cb(err.message);
-    });
 
-    sendReq.pipe(file);
+        // verify response code
+        sendReq.on('response', function(response) {
+            if (response.statusCode !== 200) {
+                reject('Response status was ' + response.statusCode);
+            }
+        });
 
-    file.on('finish', function() {
-        file.close(cb);  // close() is async, call cb after close completes.
-        cache.put(url, dest);
-    });
+        // check for request errors
+        sendReq.on('error', function (err) {
+            fs.unlink(dest);
+            reject(err.message);
+        });
 
-    file.on('error', function(err) { // Handle errors
-        fs.unlink(dest); // Delete the file async. (But we don't check the result)
-        return cb(err.message);
+        sendReq.pipe(file);
+
+        file.on('finish', function() {
+            file.close(()=>{resolve(dest)});  // close() is async, call cb after close completes.
+            cache.put(url, dest);
+        });
+
+        file.on('error', function(err) { // Handle errors
+            fs.unlink(dest); // Delete the file async. (But we don't check the result)
+            reject(err.message);
+        });
     });
-    return null;
 };
 const dropbox_file_upload = function(dropbox, filePath, uploadPath, chunk_size) {
   chunk_size = chunk_size || 10 * 1024 * 1024; // 10MB
