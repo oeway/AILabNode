@@ -18,7 +18,7 @@ RUN curl -SLO "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-
   && rm "node-v$NODE_VERSION-linux-x64.tar.xz" \
   && ln -s /usr/local/bin/node /usr/local/bin/nodejs
 
-RUN set -x \
+RUN _=$(date) set -x \
         && git clone https://github.com/oeway/AILabNode.git /src/AILabNode 
 
 WORKDIR /src/AILabNode

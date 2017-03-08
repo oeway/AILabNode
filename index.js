@@ -292,7 +292,7 @@ ddpclient.on('socket-error', function(error) {
 
 process.on('SIGINT', ()=>{
     console.log("interrupting...");
-    utils.save_cache();
+    utils.save_cache(workdir);
     worker_set({status:'exit'});
     process.exit();
 });

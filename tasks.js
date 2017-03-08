@@ -137,7 +137,11 @@ class Task{
       // replace for dropbox
       url = url.split("?dl=0").join("?dl=1");
       return new Promise((resolve, reject)=>{
-        utils.download(url, file_path, allow_cache, resolve);
+        const ret = utils.download(url, file_path, allow_cache, resolve);
+        if(ret){
+            console.log('using cache:', ret);
+            resolve(ret);
+        };
       });
     }
     getWidgetCode (name){

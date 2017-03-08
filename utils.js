@@ -5,18 +5,19 @@ const cache = require('memory-cache');
 
 exports.load_cache = function(workdir){
   workdir = workdir || '';
-  try {
-    const json = JSON.parse(fs.readFileSync(path.join(workdir, '__cache__.json'), 'utf8'));
-    if(json && json.downloaded_files){
-      for(let i in json.downloaded_files){
-        const f = json.downloaded_files[i];
-        if(path.exists(f)){
-          cache.put(f.url, f.path)
+  const cachejson = path.join(workdir, '__cache__.json');
+  if(fs.existsSync(cachejson)){
+      const json = JSON.parse(fs.readFileSync(cachejson, 'utf8'));
+      if(json && json.downloaded_files){
+        for(let i in json.downloaded_files){
+          const f = json.downloaded_files[i];
+          if(fs.existsSync(f.path)){
+              console.log('put '+  path.basename(f.path) +' to cache')
+            cache.put(f.url, f.path)
+          }
         }
+        console.log('cache loaded.')
       }
-    }
-  } catch (e) {
-    console.log('can not load cache file')
   }
 }
 
@@ -25,7 +26,7 @@ exports.save_cache = function(workdir){
     const fileList = []
     const ks = cache.keys()
     for(let i in ks){
-        if(path.exists(cache.get(ks[i]))){
+        if(fs.existsSync(cache.get(ks[i]))){
           fileList.push({url:ks[i], path:cache.get(ks[i])})
       }
     }
@@ -43,7 +44,7 @@ exports.patchDropboxMethods = function(Task, dropbox){
         // replace for dropbox
         url = url.split("?dl=0").join("?dl=1");
         Promise.all([
-          dropbox.filesSaveUrl({path: this.dropboxPath + '/' + filename, url:url}),
+          dropbox.filesSaveUrl({path: this.dropboxPath + '/' + file_name, url:url}),
           this.downloadUrl(url, file_path, allow_cache)
         ]).then((result)=>{
           console.log(result);
@@ -120,10 +121,10 @@ const download = function(url, dest, allow_cache, cb) {
     // timout = timout || 36000000;
     if(allow_cache){
       const k = cache.get(url);
-      if(k && path.exists(k)) return k;
+      if(k && fs.existsSync(k)) return k;
     }
     cache.del(url);
-
+    console.log('downloading ', url);
     var sendReq = request.get(url);
     var file = fs.createWriteStream(dest);
 
