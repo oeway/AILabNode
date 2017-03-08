@@ -20,6 +20,7 @@
   "dependencies": {
     "ddp": "^0.12.1",
     "dropbox": "^2.5.1",
+    "memory-cache": "^0.1.6",
     "mkdirp": "^0.5.1",
     "python-bridge": "git+https://github.com/oeway/node-python-bridge.git",
     "queue": "^4.2.1",

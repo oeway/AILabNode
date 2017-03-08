@@ -1,28 +1,55 @@
 const fs = require('fs');
 const request = require('request');
 const path = require('path');
+const cache = require('memory-cache');
+
+exports.load_cache = function(workdir){
+  workdir = workdir || '';
+  try {
+    const json = JSON.parse(fs.readFileSync(path.join(workdir, '__cache__.json'), 'utf8'));
+    if(json && json.downloaded_files){
+      for(let i in json.downloaded_files){
+        const f = json.downloaded_files[i];
+        if(path.exists(f)){
+          cache.put(f.url, f.path)
+        }
+      }
+    }
+  } catch (e) {
+    console.log('can not load cache file')
+  }
+}
+
+exports.save_cache = function(workdir){
+    workdir = workdir || '';
+    const fileList = []
+    const ks = cache.keys()
+    for(let i in ks){
+        if(path.exists(cache.get(ks[i]))){
+          fileList.push({url:ks[i], path:cache.get(ks[i])})
+      }
+    }
+    const json = JSON.stringify({downloaded_files: fileList});
+    fs.writeFileSync(path.join(workdir, '__cache__.json'), json, 'utf8')
+}
 
 exports.patchDropboxMethods = function(Task, dropbox){
-    Task.prototype.downloadUrl = function(url, filename){
-      // replace for dropbox
-      url = url.split("?dl=0").join("?dl=1");
-      return new Promise((resolve, reject)=>{
-        download(url, path.join(this.workdir, filename), resolve);
-      });
-    };
-    Task.prototype.saveDownloadUrl = function(url, filename){
+    Task.prototype.saveDownloadUrl = function(url, file_path, allow_cache){
+      if(!path.isAbsolute(file_path)){
+          file_path = path.join(this.workdir, file_path);
+      }
+      const file_name = path.basename(file_path);
       return new Promise((resolve, reject)=>{
         // replace for dropbox
         url = url.split("?dl=0").join("?dl=1");
-        dropbox.filesSaveUrl({path: this.dropboxPath + '/' + filename, url:url}).then((result)=>{
+        Promise.all([
+          dropbox.filesSaveUrl({path: this.dropboxPath + '/' + filename, url:url}),
+          this.downloadUrl(url, file_path, allow_cache)
+        ]).then((result)=>{
           console.log(result);
+          resolve(file_path);
         },(err)=>{
           reject(err);
-        });
-        this.downloadUrl(url, filename).then(()=>{
-          resolve(filename);
-        }).catch(function(error) {
-          console.log(error);
         });
       });
     };
@@ -38,7 +65,7 @@ exports.patchDropboxMethods = function(Task, dropbox){
     };
     Task.prototype.uploadFile= function(file_path, chunk_size, create_shared_link, short_url){
       if(!path.isAbsolute(file_path)){
-          file_path = path.join(this.workdir, file_name);
+          file_path = path.join(this.workdir, file_path);
       }
       const file_name = path.basename(file_path);
       const upload_file_path = this.dropboxPath + '/' + file_name;
@@ -88,9 +115,18 @@ exports.patchDropboxMethods = function(Task, dropbox){
     };
 }
 
-const download = function(url, dest, cb) {
-    var file = fs.createWriteStream(dest);
+const download = function(url, dest, allow_cache, cb) {
+    allow_cache = allow_cache || true;
+    // timout = timout || 36000000;
+    if(allow_cache){
+      const k = cache.get(url);
+      if(k && path.exists(k)) return k;
+    }
+    cache.del(url);
+
     var sendReq = request.get(url);
+    var file = fs.createWriteStream(dest);
+
 
     // verify response code
     sendReq.on('response', function(response) {
@@ -109,12 +145,14 @@ const download = function(url, dest, cb) {
 
     file.on('finish', function() {
         file.close(cb);  // close() is async, call cb after close completes.
+        cache.put(url, dest);
     });
 
     file.on('error', function(err) { // Handle errors
         fs.unlink(dest); // Delete the file async. (But we don't check the result)
         return cb(err.message);
     });
+    return null;
 };
 const dropbox_file_upload = function(dropbox, filePath, uploadPath, chunk_size) {
   chunk_size = chunk_size || 10 * 1024 * 1024; // 10MB
@@ -212,4 +250,3 @@ const dropbox_file_upload = function(dropbox, filePath, uploadPath, chunk_size) 
 
 exports.download = download;
 exports.dropbox_file_upload = dropbox_file_upload;
-

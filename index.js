@@ -63,6 +63,7 @@ mkdirp(workdir, (err)=>{
   if(err) console.error(err);
 });
 
+utils.load_cache(workdir);
 
 const ddpclient = new DDPClient({
   // All properties optional, defaults shown
@@ -291,6 +292,7 @@ ddpclient.on('socket-error', function(error) {
 
 process.on('SIGINT', ()=>{
     console.log("interrupting...");
+    utils.save_cache();
     worker_set({status:'exit'});
     process.exit();
 });

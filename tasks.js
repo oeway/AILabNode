@@ -129,6 +129,17 @@ class Task{
         if(err) console.error('task addToSet error:', err);
       });
     }
+    downloadUrl(url, file_path, allow_cache) {
+      allow_cache = allow_cache || false;
+      if(!path.isAbsolute(file_path)){
+          file_path = path.join(this.workdir, file_path);
+      }
+      // replace for dropbox
+      url = url.split("?dl=0").join("?dl=1");
+      return new Promise((resolve, reject)=>{
+        utils.download(url, file_path, allow_cache, resolve);
+      });
+    }
     getWidgetCode (name){
       return this.widget.getCode(name);
     }
