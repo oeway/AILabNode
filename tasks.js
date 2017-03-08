@@ -45,7 +45,7 @@ class Task{
       };
       this.$ctrl = Object.assign({}, this.default_ctrl);
       this.default_context = {
-       workdir: path.resolve(worker_dir, '../'),
+       WORKDIR: path.resolve(worker_dir, '../'),
        Buffer: Buffer,
        console: console,
        setTimeout: setTimeout,
