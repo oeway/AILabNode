@@ -10,6 +10,7 @@ cd AILabNode
 # skip the following command if have node.js installed, gcc/4.9 is required
 sh install_node.sh
 
+# if the following doesn't work, you need to run `export PATH=$HOME/local/bin:$PATH` and run it again.
 npm install
 ```
 
