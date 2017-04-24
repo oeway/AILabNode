@@ -1,14 +1,35 @@
 # Node.js Toolkits for AILab platform (WIP)
 
 # Installation
+First, you will need to install nodejs(https://nodejs.org/).
 
+For linux user:
+```bash
+echo 'export PATH=$HOME/local/bin:$PATH' >> ~/.bashrc
+. ~/.bashrc
+mkdir ~/local
+cd ~/local
+# nodejs binaries: https://nodejs.org/download/release/latest-v7.x/
+curl https://nodejs.org/download/release/latest-v7.x/node-v7.9.0-linux-x64.tar.gz | tar --strip-components 1 -xzv
+```
 
+Alternatively, you can try to compile it yourself:
+```bash
+echo 'export PATH=$HOME/local/bin:$PATH' >> ~/.bashrc
+. ~/.bashrc
+mkdir ~/local
+mkdir ~/node-latest-install
+cd ~/node-latest-install
+curl http://nodejs.org/dist/node-latest.tar.gz | tar xz --strip-components=1
+./configure --prefix=~/local
+make install
+curl https://www.npmjs.org/install.sh | sh
+```
+
+Then you can install AILabNode:
 ```bash
 git clone https://github.com/oeway/AILabNode.git
 cd AILabNode
-
-# skip the following command if have node.js installed, gcc/4.9 is required
-sh install_node.sh
 
 # if the following doesn't work, you need to run `export PATH=$HOME/local/bin:$PATH` and run it again.
 npm install
