@@ -144,7 +144,7 @@ class Task{
     }
     init (){
         try {
-          this.set({'status.error':'', 'status.info': ''});
+          // this.set({'status.error':'', 'status.info': ''});
           const timeout = this.widget.get('timeout') || 60000;
           const code_snippets = this.widget.get('code_snippets');
           const script = new vm.Script(code_snippets['WORKER_js'].content, {
