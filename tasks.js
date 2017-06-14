@@ -169,7 +169,7 @@ class Task{
           this.context = Object.assign({}, this.default_context);
           this.context.$ctrl = this.$ctrl;
           script.runInNewContext(this.context, {timeout: timeout});
-          this.set({'status.stage':'attached', 'status.info':'','status.error':''});
+          this.set({'status.stage':'attached'});
           try {
               if(this.$ctrl.init){
                   this.$ctrl.init();
